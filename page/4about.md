@@ -11,7 +11,7 @@ type: page
 
 ## 关于我
 
-<iframe src="https://githubbadge.appspot.com/csbhwy?s=1" style="border: 0;height: 142px;width: 200px;overflow: hidden;" frameBorder="0"></iframe>
+<iframe src="https://githubbadge.appspot.com/gaohaoyang?s=1" style="border: 0;height: 142px;width: 200px;overflow: hidden;" frameBorder="0"></iframe>
 
 很喜欢崔健的歌词：现实像块石头，精神像个蛋，石头虽然坚硬，可蛋里才是生命。
 
@@ -22,13 +22,13 @@ type: page
 ## 联系我
 
 * GitHub：[Gaohaoyang](https://github.com/csbhwy)
-* email：gaohaoyang126@126.com
-* [Weibo](http://weibo.com/3115521wh)
-* [知乎](https://www.zhihu.com/people/gaohaoyang)
-* [Facebook](https://www.facebook.com/gaohaoyang.water)
-* [Twitter](https://twitter.com/gaohaoyang126)
-* [豆瓣](https://www.douban.com/people/42525035/)
-* [豆瓣音乐人-浩阳的小站](https://site.douban.com/haoyangaiyinyue/)
+* email：csbhwy@126.com
+* [Weibo](http://weibo.com/3115521wh):weibo
+* [知乎](https://www.zhihu.com/people/gaohaoyang):zhihu
+* [Facebook](https://www.facebook.com/gaohaoyang.water):fc
+* [Twitter](https://twitter.com/gaohaoyang126):tw
+* [豆瓣](https://www.douban.com/people/42525035/):db
+* [豆瓣音乐人-浩阳的小站](https://site.douban.com/haoyangaiyinyue/):site
 
 ## 关于本站
 
