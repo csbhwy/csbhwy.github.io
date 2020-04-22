@@ -32,20 +32,9 @@ type: page
 
 欢迎大家提一些对本站主题的建议，可以直接在下面留言或者新建一个 [Issue](https://github.com/Gaohaoyang/gaohaoyang.github.io/issues)。
 
-### Update Log
-
-*2017.2.28*
-
-- `[^]` 修复目录滚动 bug [#22](https://github.com/Gaohaoyang/gaohaoyang.github.io/issues/22), [#48](https://github.com/Gaohaoyang/gaohaoyang.github.io/issues/48)
-
-*2016.6.20*
-
-* `[+]` 在文章页中添加上一篇和下一篇文章链接。
-* `[^]` 修改 font-family 顺序，避免微软雅黑将单引号解析为全角。
-
 ## 友情链接
 
-[About](https://www.baidu.com) \| [Anotherhome](https://www.baidu.com) \| [Reverland](https://www.baidu.com)
+[AndroidDevelopment](https://developer.android.google.cn/) \| [AndroidXref](http://aospxref.com/) \| [微雪课堂](http://www.waveshare.net/study/portal.php)\| [Runoob](https://www.runoob.com/) \| [Linux公社](https://www.linuxidc.com/)\| [Android巴士](http://www.apkbus.com/)
 
 ## Comments
 
