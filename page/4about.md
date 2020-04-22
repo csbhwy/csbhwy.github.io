@@ -10,17 +10,10 @@ type: page
 {:toc}
 
 ## 关于我
-
-<iframe src="https://githubbadge.appspot.com/gaohaoyang?s=1" style="border: 0;height: 142px;width: 200px;overflow: hidden;" frameBorder="0"></iframe>
-
-很喜欢崔健的歌词：现实像块石头，精神像个蛋，石头虽然坚硬，可蛋里才是生命。
-
-还有，学习是一个非常愉快的过程。共同加油！
-
-* 2020
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200422130008993.jpeg?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70#pic_center)
+**人们往往把任性也叫做自由，但是任性只是非理性的自由，人性的选择和自决都不是出于意志的理性，而是出于偶然的动机以及这种动机对感性外在世界的依赖**
 
 ## 联系我
-
 * github：https://github.com/csbhwy
 * email：csbhwy@126.com
 
@@ -37,5 +30,3 @@ type: page
 [AndroidDevelopment](https://developer.android.google.cn/) \| [AndroidXref](http://aospxref.com/) \| [微雪课堂](http://www.waveshare.net/study/portal.php)\| [Runoob](https://www.runoob.com/) \| [Linux公社](https://www.linuxidc.com/)\| [Android巴士](http://www.apkbus.com/)
 
 ## Comments
-
-{% include comments.html %}
