@@ -1,4 +1,15 @@
-﻿##### [DESCRIPTION]
+﻿---
+layout: post
+title:  【VoLTE】增强型4GLTE开关默认处于关闭状态如何实现
+categories: Android
+tags:   VOLTE LTE
+author: wangfan
+---
+
+* content
+{:toc}
+
+##### [DESCRIPTION]
 MTK默认的版本中，Setting里面的增强4GLTE开关（VoLTE）默认是开启的，根据运营商的定制需求，想要将其默认设置为关闭状态
 
 ##### [SOLUTION]
