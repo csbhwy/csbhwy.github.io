@@ -1,0 +1,993 @@
+﻿@[toc]
+>本文基于Android 10.0，转载自https://blog.csdn.net/FightFightFight/article/details/85797336
+#### 1. 手动背光调节
+##### 1.1 在Settings/SystemUI中手动调节
+在界面(SystemUI)和Settings中拖动进度条调节亮度时，调节入口在BrightnessController中:
+
+```java
+@Override
+public void onChanged(ToggleSlider toggleSlider, boolean tracking, boolean automatic,
+        int value, boolean stopTracking) {
+    ...
+    //获取亮度值
+    final int val = convertGammaToLinear(value, min, max);
+    //设置亮度值
+    setBrightness(val);
+    if (!tracking) {
+        //在异步任务中将新的亮度值保存在SettingsProvider中
+        AsyncTask.execute(new Runnable() {
+                public void run() {
+                    Settings.System.putIntForUser(mContext.getContentResolver(),
+                            setting, val, UserHandle.USER_CURRENT);
+                }
+            });
+    }
+}
+```
+在BrightnessController中，首先根据亮度条的拖动，计算出新的亮度值，然后将调用本类中的setBrightneess()设置亮度，设置完成后，通过异步任务将新的亮度值保存在SettingsProvider中，我们看下setBrightness方法：
+
+```java
+//frameworks/base/packages/SystemUI/src/com/android/systemui/settings/BrightnessController.java
+private void setBrightness(int brightness) {
+    mDisplayManager.setTemporaryBrightness(brightness);
+}
+
+//frameworks/base/services/core/java/com/android/server/display/DisplayManagerService.java
+public void setTemporaryBrightness(int brightness) {
+    mContext.enforceCallingOrSelfPermission(
+            Manifest.permission.CONTROL_DISPLAY_BRIGHTNESS,
+            "Permission required to set the display's brightness");
+    final long token = Binder.clearCallingIdentity();
+    try {
+        synchronized (mSyncRoot) {
+            mDisplayPowerController.setTemporaryBrightness(brightness);
+        }
+    } finally {
+        Binder.restoreCallingIdentity(token);
+    }
+}
+
+//frameworks/base/services/core/java/com/android/server/display/DisplayPowerController.java
+public void setTemporaryBrightness(int brightness) {
+    //异步消息更新背光
+    Message msg = mHandler.obtainMessage(MSG_SET_TEMPORARY_BRIGHTNESS,
+            brightness, 0 /*unused*/);
+    msg.sendToTarget();
+}
+
+//我们看一下handleMessage，需要注意的是这个handler为DisplayControllerHandler的实例，来自于PowerManagerService：
+case MSG_SET_TEMPORARY_BRIGHTNESS:
+          mTemporaryScreenBrightness = msg.arg1;
+          updatePowerState();
+          break;
+```
+从上面的分析可以知道，在消息处理时，将brightness赋值给了全局的mTemporaryScreenBrightness，再调用后面的updatePowerState()进行处理：
+
+```java
+private void updatePowerState() {
+    ...
+    //手动设置亮度是否改变
+    final boolean userSetBrightnessChanged = updateUserSetScreenBrightness();
+    if (userSetBrightnessChanged) {
+        mTemporaryScreenBrightness = -1;
+    }
+    // Use the temporary screen brightness if there isn't an override, either from
+    // WindowManager or based on the display state.
+    if (mTemporaryScreenBrightness > 0) {
+        //使用手动设置的亮度
+        brightness = mTemporaryScreenBrightness;
+        mAppliedTemporaryBrightness = true;
+    } else {
+        mAppliedTemporaryBrightness = false;
+    }
+    ...
+    if (!mPendingScreenOff) {
+        final boolean isDisplayContentVisible = mColorFadeEnabled ?
+                (mColorFadeEnabled && mPowerState.getColorFadeLevel() == 1.0f) :
+                (state == Display.STATE_ON && mSkipRampState == RAMP_STATE_SKIP_NONE);
+        if (initialRampSkip || hasBrightnessBuckets
+                || wasOrWillBeInVr || !isDisplayContentVisible || brightnessIsTemporary) {
+            animateScreenBrightness(brightness, 0);
+        } else {
+            animateScreenBrightness(brightness,
+                    slowChange ? mBrightnessRampRateSlow : mBrightnessRampRateFast);
+        }
+    }
+    ...
+}
+```
+在updatePowerState()方法中，如果此时mTemporaryScreenBrightness大于0,则设备将使用它作为最终的亮度，而它大于0取决与updateUserSetScreenBrightness()方法的返回值，该方法如下：
+
+```java
+private boolean updateUserSetScreenBrightness() {
+    if (mPendingScreenBrightnessSetting < 0) {
+        return false;
+    }
+    //add for bug BEG
+    if (mPendingScreenBrightnessSetting > 0 && (mCurrentScreenBrightnessSetting == mTemporaryScreenBrightness)){
+        return true;
+    }
+    //add for bug END
+    if (mCurrentScreenBrightnessSetting == mPendingScreenBrightnessSetting) {
+        mPendingScreenBrightnessSetting = -1;
+        return false;
+    }
+    mCurrentScreenBrightnessSetting = mPendingScreenBrightnessSetting;
+    mLastUserSetScreenBrightness = mPendingScreenBrightnessSetting;
+    mPendingScreenBrightnessSetting = -1;
+    return true;
+}
+```
+这个方法中，实际是根据mPendingScreenBrightnessSetting的值做不同的处理。总结来说，如果mPendingScreenBrightnessSetting大于0,则返回true，并将当前亮度设置为它的值，否则返回false，再进一步概括，就是如果mPendingScreenBrightnessSetting和mTemporaryScreenBrightness的值都大于0，那么系统将使用mTemporaryScreenBrightness的值作为亮度值。
+
+mPendingScreenBrightnessSetting则是通过SettingsObserver监测Settings数据库中的值，它获取如下：
+
+```java
+private void handleSettingsChange(boolean userSwitch) {
+    mPendingScreenBrightnessSetting = getScreenBrightnessSetting();
+    sendUpdatePowerState();
+}
+
+
+private int getScreenBrightnessSetting() {
+    final int brightness = Settings.System.getIntForUser(mContext.getContentResolver(),
+            Settings.System.SCREEN_BRIGHTNESS, mScreenBrightnessDefault,
+            UserHandle.USER_CURRENT);
+    return clampAbsoluteBrightness(brightness);
+}
+```
+而对SettingsProvider中的亮度值的保存正是在BrightnessController中setBrightness()之后。
+
+因此，对于手动背光调节，首先调用setBrightnessVal()进入DPC后，将调节亮度设置给全局变量mTemporaryScreenBrightness，然后等待SettingsProvider中保存的亮度值发生改变，当改变完成后，mPendingScreenBrightnessSetting将从SettingsProvider中读取到新的值，然后将使用mTemporaryScreenBrightness作为系统亮度值，并将mTemporaryScreenBrightness重置为-1.
+
+之后的流程和8.1相比差别不大，最终会调用animateScreenBrightness()方法去设置亮度。
+通过以上的分析可以发现，将用户调节亮度值表示为"Temporary"也是有原因的，因为在设置完成后，他将又变为-1。
+
+时序图如下：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200525135440685.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+#### 2.自适应背光调节
+从android P开始，背光设置流程中最大的差异，是自动背光调节流程。在Google IO上提出，Android P的新特性之一就是自适应背光。Google和DeepMind合作，利用机器学习，创建了自适应背光，通过了解用户在环境中设定亮度滑块的方式，学习你的习惯，从而自动完成亮度调节。下面我们就来看看，androidP中新的自适应背光。
+首先我们看自适应背光的架构，了解一些类的功能后，再分析其流程。
+##### 2.1 类架构
+![在这里插入图片描述](https://img-blog.csdnimg.cn/2020052514065520.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+其中AutomaticBrightnessController中的功能进一步紧收，只进行环境光强的监听后的一些处理，将背光曲线的创建等工作，交给了BrightnessMappingStrategy，它将负责曲线的创建，自动背光值的计算等，当获取自动背光值时，AutomaticBrightnessController将调用BrightnessMappingStrategy的接口获取。
+
+而BrightnessMappingStrategy在创建曲线时，则需要从BrightnessConfigure类中读取两个数组源:config_autoBrightnessLevels和config_autoBrightnessDisplayValuesNits
+##### 2.2 创建背光样条曲线
+自动背光曲线的创建放在了BrightnessMappingStrategy中，当系统启动后，进入DisplayPowerController构造方法后，就会开始创建背光曲线
+
+```java
+public DisplayPowerController(Context context,
+        DisplayPowerCallbacks callbacks, Handler handler,SensorManager sensorManager, DisplayBlanker blanker) {
+      ...
+      //获取映射Lux-Nits-Backlight值的对象
+      mBrightnessMapper = BrightnessMappingStrategy.create(resources);
+      ...
+}
+```
+我们从BrightnessMappingStrategy.create(resources)进入，来查看曲线的绘制，create()方法如下，相关代码已进行注释：
+
+```java
+public static BrightnessMappingStrategy create(Resources resources) {
+    //Lux值的数组,getLuxLevels()中会将Lux[0] = 0.
+    float[] luxLevels = getLuxLevels(resources.getIntArray(
+            com.android.internal.R.array.config_autoBrightnessLevels));
+    //Lux值对应的背光值，9.0中将不会使用他
+    int[] brightnessLevelsBacklight = resources.getIntArray(
+            com.android.internal.R.array.config_autoBrightnessLcdBacklightValues);
+    //描述和Lux值对应的屏幕亮度的Nits值数组，长度比Lux值数组大1。如果配置了该值，则：
+    // ---config_screenBrightnessNits必须配置
+    // ---config_screenBrightnessBacklight必须配置
+    float[] brightnessLevelsNits = getFloatArray(resources.obtainTypedArray(
+            com.android.internal.R.array.config_autoBrightnessDisplayValuesNits));
+    //用户可调整的最大Gama值
+    float autoBrightnessAdjustmentMaxGamma = resources.getFraction(
+            com.android.internal.R.fraction.config_autoBrightnessAdjustmentMaxGamma,
+            1, 1);
+    //描述屏幕亮度的nits值数组
+    float[] nitsRange = getFloatArray(resources.obtainTypedArray(com.android.internal.R.array.config_screenBrightnessNits));
+    //描述与nitsRange 数组中的亮度值(单位为Nits)相对应的屏幕背光值
+    int[] backlightRange = resources.getIntArray(
+            com.android.internal.R.array.config_screenBrightnessBacklight);
+    //判断是否是有效映射:1.非空;2.长度相同;3.元素>=0;4.nitsRange/luxLevels必须递增,backlightRange/brightnessLevelsNits必须非递减
+    if (isValidMapping(nitsRange, backlightRange)
+            && isValidMapping(luxLevels, brightnessLevelsNits)) {
+        //最小背光值6
+        int minimumBacklight = resources.getInteger(
+                com.android.internal.R.integer.config_screenBrightnessSettingMinimum);
+        //最大背光值255
+        int maximumBacklight = resources.getInteger(
+                com.android.internal.R.integer.config_screenBrightnessSettingMaximum);
+        //获取BrightnessConfiguration.Builder实例
+        BrightnessConfiguration.Builder builder = new BrightnessConfiguration.Builder();
+        //将读取的Lux值和nits值保存在builder对象中
+        builder.setCurve(luxLevels, brightnessLevelsNits);
+        //映射Lux值和Nits值，而非Lux值和直接显示的背光值，物理映射
+        return new PhysicalMappingStrategy(builder.build(), nitsRange, backlightRange,
+                autoBrightnessAdjustmentMaxGamma);
+    } else if (isValidMapping(luxLevels, brightnessLevelsBacklight)) {
+        //直接映射Lux值和背光值，简单映射
+        return new SimpleMappingStrategy(luxLevels, brightnessLevelsBacklight,
+                autoBrightnessAdjustmentMaxGamma);
+    } else {
+        return null;
+    }
+}
+```
+在create()方法中，首先读取config.xml文件中的配置值，然后根据这个配置值决定映射方式。
+在9.0之前，自动背光只需配置Lux值和对应的Backlight值来创建简单的映射，在9.0中，摒弃了这种方式，额外增加了三个配置值，并根据这些配置值决定是使用物理映射还是简单映射，涉及到的配置值如下：
+
+```xml
+<!-- Lux值数组-->
+<integer-array name="config_autoBrightnessLevels">
+</integer-array>
+<!-- Lux值对应的背光值数组 -->
+<integer-array name="config_autoBrightnessLevels">
+</integer-array>
+<!-- Lux值对应的Nits值数组 -->
+<array name="config_autoBrightnessDisplayValuesNits">
+</array>
+<!-- 描述屏幕发光强度的Nits值数组 -->
+<array name="config_screenBrightnessNits">
+</array>
+<!-- 和发光强度Nits值对应的背光值数组 -->
+<integer-array name="config_screenBrightnessBacklight">
+</integer-array>
+```
+>在以上四个配置值中，后3组是9.0新添加，如果没有配置这三组，则系统将使用前两组配置值创建简单映射关系。因此，9.0中必须配置后三个值，以使用物理映射关系，当配置这些值后，config_autoBrightnessLevels将不再使用。
+
+读取完配置值后，将Lux值数组和Lux值对应的Nits值数组通过setCurve()方法赋值给了builder对象，最终会作为BrightnessConfiguration对象的全局变量。
+BrightnessConfiguration表示亮度的配置类，其中保存了Lux值数组和Lux值对应的Nits值数组：
+
+```java
+private BrightnessConfiguration(float[] lux, float[] nits, String description) {
+    mLux = lux;
+    mNits = nits;
+    mDescription = description;
+}
+```
+同时，提供了一个getCurve()接口，用于提供它的mLux和mNits。
+接下来进入到物理映射关系对象PhysicalMappingStrategy的创建，看其构造方法：
+
+```java
+/**
+ * @param config BrightnessConfiguration对象，携带有用于创建曲线的Lux数组和对应的Nits数组
+ * @param nits 描述屏幕发光强度的nits值数组
+ * @param backlight 描述与nits值数组对应的背光值
+ * @param maxGamma 用户可调整最大Gama值
+ */
+public PhysicalMappingStrategy(BrightnessConfiguration config, float[] nits,
+                               int[] backlight, float maxGamma) {
+    mMaxGamma = maxGamma;
+    //自动亮度调节值
+    mAutoBrightnessAdjustment = 0; 
+    //在自动背光开启的情况下，用户手动调节亮度时的当前Lux值
+    mUserLux = -1;
+    //在自动背光开启的情况下，用户手动调节设置的亮度
+    mUserBrightness = -1;
+
+    // Setup the backlight spline
+    final int N = nits.length;
+    float[] normalizedBacklight = new float[N];
+    //将背光值/255后，存储在normalizedBacklight数组中
+    for (int i = 0; i < N; i++) {
+        normalizedBacklight[i] = normalizeAbsoluteBrightness(backlight[i]);
+    }
+    //创建Nits-Backlight样条曲线
+    mNitsToBacklightSpline = Spline.createSpline(nits, normalizedBacklight);
+    //创建Backlight-Nits样条曲线
+    mBacklightToNitsSpline = Spline.createSpline(normalizedBacklight, nits);
+    mDefaultConfig = config;
+    mConfig = config;
+    //将根据不同的场景，创建Lux-Nits样条曲线
+    computeSpline();
+}
+```
+在PhysicalMappingStrategy的构造方法中，首先根据config_screenBrightnessNits数组和config_screenBrightnessBacklight数组，创建了两条映射曲线，然后调用computeSpline()方法。
+computeSpline()是很重要的一个方法，这个方法中除了创建另外一条Lux-Nits曲线外，还会根据用户当前对亮度的调整，插入用户调整后的值，并调整Lux-Nits曲线，该方法如下：
+
+```java
+private void computeSpline() {
+    //得到BrightnessConfiguration中的Lux数组和Lux值对应的Nits数组，并放入Pair对象中
+    Pair<float[], float[]> defaultCurve = mConfig.getCurve();
+    //Lux数组
+    float[] defaultLux = defaultCurve.first;
+    //和Lux数组映射的Nits数组
+    float[] defaultNits = defaultCurve.second;
+    //创建一个和defaultNits数组等长的数组，用来存放对应的背光值，从Nits-backlights曲线中获取
+    //根据Lux-Nit值，从NitsToBacklight曲线中获取背光值
+    //即根据config_autoBrightnessDisplayValuesNits值从config_screenBrightnessNits与config_screenBrightnessBacklight的曲线中获取默认的背光值
+    float[] defaultBacklight = new float[defaultNits.length];
+    for (int i = 0; i < defaultBacklight.length; i++) {
+        defaultBacklight[i] = mNitsToBacklightSpline.interpolate(defaultNits[i]);
+    }
+    //对得到的默认背光值进一步加工,如果用户设置过亮度，需要将用户设置的亮度值添加进曲线，得到
+    //调整后的Lux值数组和backlight值数组
+    Pair<float[], float[]> curve = getAdjustedCurve(defaultLux, defaultBacklight, mUserLux,
+            mUserBrightness, mAutoBrightnessAdjustment, mMaxGamma);
+    //最终的Lux值和背光值
+    float[] lux = curve.first;
+    float[] backlight = curve.second;
+    float[] nits = new float[backlight.length];
+    //根据背光值，从config_screenBrightnessNits和onfig_screenBrightnessBacklight构建的mBacklightToNitsSpline曲线中获取Nit值
+    for (int i = 0; i < nits.length; i++) {
+        nits[i] = mBacklightToNitsSpline.interpolate(backlight[i]);
+    }
+    //Lux-Nits曲线,最终的背光值从此曲线+mNitsToBacklightSpline曲线获取
+    mBrightnessSpline = Spline.createSpline(lux, nits);
+}
+```
+在这个方法中，首先调用mConfig.getCurve()方法，获取了mConfig对象中的mLux和mNit的拷贝，这两个值就是在创建mConfig时传入的config_autoBrightnessLevels数组和config_autoBrightnessDisplayValuesNits数组。
+然后利用得到的nits值从曲线mNitsToBacklightSpline中得到背光值数组defaultBacklight;
+
+接下来，调用getAdjustedCurve()方法对defaultBacklight[]做进一步加工，如果在自动背光打开的情况下，用户没有通过亮度条调节背光，则将返回原数据。此处暂且认为没有操作过亮度条，对getAdjustedCurve()先不做分析。
+
+最后，利用defaultBacklight数组从曲线mBacklightToNitsSpline中得到Nits值，然后，创建表示Lux值和对应Nits值的曲线mBrightnessSpline，这也是创建的最后一条全局样条曲线(在某些方法中会创建一些临时曲线)。
+
+到这里为止，对自动背光样条曲线的创建就分析完成了，整体来看，共创建了三条样条曲线，对Lux-Nit-Backlight进行映射。而且和8.1不同的是，并非直接由Lux和Baclight映射，而是将Nit作为Lux和Backlight的中间介质。这样做相比之前版本中，有什么好处呢？
+
+这里简单引用一些国际单位制的定义:
+>光照度：从光源照射到单位面积上的光通量,以E表示,照度的单位为勒克斯(Lux,简称lx);
+
+>光亮度：指一个表面的明亮程度,以L表示,即从一个表面反射出来的光通量.不同物体对光有不同的反射系数或吸收系数.光的强度可用照在平面上的光的总量来度量,这叫入射光(inci-dentlight)或照度(illuminance).若用从平面反射到眼球中的光量来度量光的强度,这种光称为反射光或亮度.例如,一般白纸大约吸收入射光量的20%,反射光量为80%;黑纸只反射入射光量的3%.所以,白纸和黑纸在亮度上差异很大。
+
+>光照度和光亮度的关系可以用如下公式表示：L=R×E,式中L为亮度,R为反射系数,E为照度.
+
+因此，从光学角度而言，我们感知的亮度是指从屏幕反射到眼球中的光的强度，而且这个强度跟光亮度(Nit)有一定关系，光亮度又跟光照度(Lux)有一定关系，因此，如果严格考虑光照度、光亮度、入射光、反射光等调节，相比通过Lux值决定背光值而言，通过Lux值决定Nit值，再由Nit值决定背光值，无疑是最精准的。
+
+了解了曲线的创建后，下面我们开始分析自动背光的调节过程。
+还是从DisplayPowerController中开始，对光照强度的采集、获取自动背光都在AutomaticBrightnessController中进行，我们从它的创建和配置分别对它进行分析。
+
+##### 2.3.AutomaticBrightnessController的初始化
+这里对AutomaticBrightnessController的创建就不进行细致的分析，和8.1相比，多添加了3个成员，其余内容变化不大，请看8.1中的分析。
+其中第一个成员是BrightnessMappingStretagy实例，由构造方法传入，用来创建曲线、获取自动背光值：
+
+```java
+//DisplayPowerController.updatePowerState()中
+
+//获取映射Lux-Nits-Backlight值的对象
+mBrightnessMapper = BrightnessMappingStrategy.create(resources);
+//初始化AutomaticBrightnessController
+if (mBrightnessMapper != null) {
+    //实例化自动背光控制器
+    mAutomaticBrightnessController = new AutomaticBrightnessController(this,
+            handler.getLooper(), sensorManager, mBrightnessMapper,
+            lightSensorWarmUpTimeConfig, mScreenBrightnessRangeMinimum,
+            mScreenBrightnessRangeMaximum, dozeScaleFactor, lightSensorRate,
+            initialLightSensorRate, brighteningLightDebounce, darkeningLightDebounce,
+            autoBrightnessResetAmbientLuxAfterWarmUp, hysteresisLevels);
+} else {
+    mUseSoftwareAutoBrightnessConfig = false;
+}
+```
+剩余两个成员为mShortTermModelValid和mShortTermModelAnchor:
+
+```java
+private boolean mShortTermModelValid;
+private float mShortTermModelAnchor;
+```
+这两个值大概意思是"短期模型是否有效？"什么是短期模型呢？就是用户设置的背光控制点。当短期模型无效后，并不会立即重置数据,而是等待环境光发生较大变化后，会清除用户设置数据，具体内容会在下面分析。
+##### 2.4 AutomaticBrightnessController的配置
+在DisplayPowerController中，每一次调用updatePowerState()更新状态时，都会对AutomaticBrightnessController进行配置：
+
+```java
+boolean hadUserBrightnessPoint = false;
+// Configure auto-brightness.
+if (mAutomaticBrightnessController != null) {
+    //曲线中是否有用户设置的短期点
+    hadUserBrightnessPoint = mAutomaticBrightnessController.hasUserDataPoints();
+    //配置mAutomaticBrightnessController
+    mAutomaticBrightnessController.configure(autoBrightnessEnabled,
+            mBrightnessConfiguration,
+            mLastUserSetScreenBrightness / (float) PowerManager.BRIGHTNESS_ON,
+            userSetBrightnessChanged, autoBrightnessAdjustment,
+            autoBrightnessAdjustmentChanged, mPowerRequest.policy);
+}
+```
+在以上逻辑中，hadUserBrightnessPoint表示是否在自动背光打开的情况下拖动亮度条调节过亮度，判断依据是BrightnessMappingStrategy中的mUserLux成员，它表示用户在开启自动背光后手动设置亮度时的Lux值：
+
+```java
+@Override
+public boolean hasUserDataPoints() {
+    return mUserLux != -1;
+}
+```
+然后开始调用configure()方法进行配置，先来看看这些参数：
+- autoBrightnessEnabled:表示自动背光是否可用，由以下值决定：
+
+```java
+//打开了自动亮度调节&&(亮屏或Doze)&&局部变量brightness为0&&BrightnessMappingStrategy不为空
+final boolean autoBrightnessEnabled = mPowerRequest.useAutoBrightness
+            && (state == Display.STATE_ON || autoBrightnessEnabledInDoze)
+            && brightness < 0
+            && mAutomaticBrightnessController != null;
+```
+- mBrightnessConfiguration:BrightnessConfiguration对象，携带有用于创建曲线的Lux值数组和对应的Nit值数组，每一个用户可对应一个BrightnessConfiguration，由DisplayManagerService负责设置。
+- brightness:当前亮度值/255的结果，区间为(0,1.0].
+- userChangedBrightness:表示用户是否手动通过拖动亮度条设置过亮度。
+- userChangedAutoBrightnessAdjustment:表示自动背光调整值adjustment是否发生变化。
+- displayPolicy:当前请求的屏幕状态。
+
+Configure()方法如下：
+
+```java
+/**
+ * @param enable 自动背光功能是否可用
+ * @param configuration BrightnessConfiguration对象
+ * @param brightness 当前背光值/255的形式
+ * @param userChangedBrightness  用户是否改变过背光值
+ * @param adjustment 自动背光调节值
+ * @param userChangedAutoBrightnessAdjustment 用户是否改变过自动背光调节值
+ * @param displayPolicy PMS中要请求的Diplay状态值
+ */
+public void configure(boolean enable, @Nullable BrightnessConfiguration configuration,
+        float brightness, boolean userChangedBrightness, float adjustment,
+        boolean userChangedAutoBrightnessAdjustment, int displayPolicy) {
+    //是否屏幕要进入Doze状态
+    boolean dozing = (displayPolicy == DisplayPowerRequest.POLICY_DOZE);
+    //设置BrightnessConfigure对象，若BrightnessConfigure发生改变，返回true
+    boolean changed = setBrightnessConfiguration(configuration);
+    //设置Display状态，若发生改变，返回true
+    changed |= setDisplayPolicy(displayPolicy);
+    //如果用户改变自动背光调节值，设置自动背光调节值
+    if (userChangedAutoBrightnessAdjustment) {
+        changed |= setAutoBrightnessAdjustment(adjustment);
+    }
+    //如果在自动亮度开启的情况下调节了亮度，需要将当前的Lux值和用户设置的亮度添加到曲线中
+    if (userChangedBrightness && enable) {
+        // Update the brightness curve with the new user control point. It's critical this
+        // happens after we update the autobrightness adjustment since it may reset it.
+        changed |= setScreenBrightnessByUser(brightness);
+    }
+    final boolean userInitiatedChange =
+            userChangedBrightness || userChangedAutoBrightnessAdjustment;
+    if (userInitiatedChange && enable && !dozing) {
+        //做旧值的记录
+        prepareBrightnessAdjustmentSample();
+    }
+    //注册解除注册LSensor
+    changed |= setLightSensorEnabled(enable && !dozing);
+    //如果changed为true，更新自动背光亮度值，但不会主动调用DPC更新背光
+    if (changed) {
+        updateAutoBrightness(false /*sendUpdate*/);
+    }
+}
+```
+在这个方法中，囊括了所有的配置，我们对这些配置进行拆分，一个一个地分析它们。
+回到configure()方法中，首先看第一个配置:
+###### 2.4.1 setBrightnessConfiguration():
+这个方法负责配置当前自动背光的BrighnessConfiguration对象，在前面也说了，这个对象中带有Lux值和Nits值，用来创建曲线和获取背光值。该方法如下：
+
+```java
+public boolean setBrightnessConfiguration(BrightnessConfiguration configuration) {
+    if (mBrightnessMapper.setBrightnessConfiguration(configuration)) {
+        //如果config对象发生改变，重置用户设置的曲线点
+        resetShortTermModel();
+        return true;
+    }
+    return false;
+}
+```
+这个方法中，又调用进入了mBrightnessMapper中，继续看看：
+
+```java
+@Override
+public boolean setBrightnessConfiguration(@Nullable BrightnessConfiguration config) {
+    if (config == null) {
+        config = mDefaultConfig;
+    }
+    if (config.equals(mConfig)) {
+        return false;
+    }
+    if (DEBUG) {
+        PLOG.start("brightness configuration");
+    }
+    //如果config对象发生改变，则替换后，调用computeSpline重新创建Lux-Nits曲线
+    mConfig = config;
+    computeSpline();
+    return true;
+}
+```
+从以上方法中得知，如果BrightnessConfiguration对象发生改变，则会根据BrightnessConfiguration中携带的Lux和Nit值数组重新创建曲线，并清除之前用户的设置。
+那么BrightnessConfiguration何时会改变呢？答案是切换一个新用户后。
+在android9.0中，针对每个用户，都会有一个BrightnessConfiguration和它映射，所以当切换用户后，设备的背光将可能发生改变。
+
+当BrightnessConfiguration发生改变且在BrighnessMappingStragety中设置完成后，将会通过resetShortTermModel()清除原有用户的配置:
+
+```java
+public void resetShortTermModel() {
+//清除用户添加的曲线点
+    mBrightnessMapper.clearUserDataPoints();
+//表示短期模型仍旧有效
+    mShortTermModelValid = true;
+    mShortTermModelAnchor = -1;
+}
+```
+clearUserDataPoint()方法如下：
+
+```java
+@Override
+public void clearUserDataPoints() {
+    if (mUserLux != -1) {
+        //回复自动背光调节值为0
+        mAutoBrightnessAdjustment = 0;
+        mUserLux = -1;//用户设置亮度时Lux值
+        mUserBrightness = -1;//用户设置亮度
+        computeSpline();//重新创建曲线
+    }
+}
+```
+在这个方法中将全局自动背光调节值、用户设置亮度值和设置亮度时Lux值进行重置，然后重新创建曲线。
+###### 2.4.2 setDisplayPolicy()
+这个方法主要根据屏幕状态来设置mShortTermModelValid的值，该方法如下：
+
+```java
+private boolean setDisplayPolicy(int policy) {
+    if (mDisplayPolicy == policy) {
+        return false;
+    }
+    final int oldPolicy = mDisplayPolicy;
+    mDisplayPolicy = policy;
+    //如果Display状态值由交互变为不可交互状态
+    if (!isInteractivePolicy(policy) && isInteractivePolicy(oldPolicy)) {
+        //发送一个30s的延迟消息，30s后将mShortTermModelValid置为false
+        mHandler.sendEmptyMessageDelayed(MSG_INVALIDATE_SHORT_TERM_MODEL,
+                SHORT_TERM_MODEL_TIMEOUT_MILLIS);
+    //如果Display状态值由不可交互变为交互状态，移除延时消息的发送
+    } else if (isInteractivePolicy(policy) && !isInteractivePolicy(oldPolicy)) {
+        mHandler.removeMessages(MSG_INVALIDATE_SHORT_TERM_MODEL);
+    }
+    return true;
+}
+```
+从这个方法中可以看出，当屏幕状态进入Doze或者Asleep后，会发送一个定义Handler，并在到达时间后将mShortTermModelValid值置为false，该值的用处，在下文说明。
+
+###### 2.4.3 setAutoBrightnessAdjustment()
+这个方法用来设置自动背光调整值，前提是自动背光调整值已经发生变化，调用此方法后，将调用到BrightnessMappingStragety中的同名方法中，如下：
+
+```java
+@Override
+public boolean setAutoBrightnessAdjustment(float adjustment) {
+    //对adjust进行限制，取值范围为[-1,1]
+    adjustment = MathUtils.constrain(adjustment, -1, 1);
+    if (adjustment == mAutoBrightnessAdjustment) {
+        return false;
+    }
+    mAutoBrightnessAdjustment = adjustment;
+    //重新创建曲线
+    computeSpline();
+    return true;
+}
+```
+在这个方法中，如果mAutoBrightnessAdjustment发生变化，也会重新创建曲线，这里也可以看得出来，曲线的创建和自动背光调整值有着莫大的关系，在默认情况下，这个值为0.那么何时这个值将发生变化，以及如何变化呢？答案留在下文。
+
+###### 2.4.4 setScreenBrightnessByUser()
+这个方法用于将用户拖动亮度条设置的亮度和当时的Lux值添加到用于创建曲线的数组中，并重新创建曲线：
+
+```java
+//添加用户设置亮度
+private boolean setScreenBrightnessByUser(float brightness) {
+    if (!mAmbientLuxValid) {
+        // If we don't have a valid ambient lux then we don't have a valid brightness anyways,
+        // and we can't use this data to add a new control point to the short-term model.
+        return false;
+    }
+    //将当前的Lux值和用户设置的背光值添加到曲线中
+    mBrightnessMapper.addUserDataPoint(mAmbientLux, brightness);
+    //设置mShortTermModelAnchor为当前Lux值 
+    mShortTermModelValid = true;
+    mShortTermModelAnchor = mAmbientLux;
+    return true;
+}
+```
+关于addUserDataPoint()方法，会在下文中进行分析。
+
+###### 2.4.5 prepareBrightnessAdjustmentSample()
+这个方法主要是当配置元素发生改变后，对旧值做一个记录，并打印一些Log，这里就不再分析，直接略过。
+
+###### 2.4.6 setLightSensorEnabled()
+这个方法负责LightSensor的注册和解除注册，当设备处于亮屏状态且打开自动背光功能时，将注册一个LightSensor，以监听环境光的强度变化，该方法如下：
+
+```java
+private boolean setLightSensorEnabled(boolean enable) {
+    if (enable) {
+        if (!mLightSensorEnabled) {
+            //表示LSensor启用
+            mLightSensorEnabled = true;
+            //LSensor开启的时间
+            mLightSensorEnableTime = SystemClock.uptimeMillis();
+            //当前LSensor的事件速率
+            mCurrentLightSensorRate = mInitialLightSensorRate;
+            //注册LSensor
+            mSensorManager.registerListener(mLightSensorListener, mLightSensor,
+                    mCurrentLightSensorRate * 1000, mHandler);
+            return true;
+        }
+    } else if (mLightSensorEnabled) {
+        mLightSensorEnabled = false;
+        mAmbientLuxValid = !mResetAmbientLuxAfterWarmUpConfig;
+        mRecentLightSamples = 0;
+        mAmbientLightRingBuffer.clear();
+        mCurrentLightSensorRate = -1;
+        mHandler.removeMessages(MSG_UPDATE_AMBIENT_LUX);
+        mSensorManager.unregisterListener(mLightSensorListener);
+    }
+    return false;
+}
+```
+这个方法比较简单，当环境光强度发生变化后，将回调mLightSensorListener接口的方法来更新：
+
+```java
+private final SensorEventListener mLightSensorListener = new SensorEventListener() {
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (mLightSensorEnabled) {
+            final long time = SystemClock.uptimeMillis();
+            final float lux = event.values[0]; 
+            //处理LSensor上报事件
+            handleLightSensorEvent(time, lux);
+        }
+    }
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // Not used.
+    }
+};
+```
+LSensor事件的处理先不分析，来看下一个configure()中调用的方法.
+
+###### 2.4.7 updateAutoBrightness()
+这个方法用来更新最终计算的自动亮度：
+
+```java
+private void updateAutoBrightness(boolean sendUpdate) {
+    if (!mAmbientLuxValid) {
+        return;
+    }
+
+    //根据Lux值从样条曲线中获取对应的背光值,区间为(0,1.0]的浮点数
+    float value = mBrightnessMapper.getBrightness(mAmbientLux);
+    //得到最终的自动背光值
+    int newScreenAutoBrightness =
+            clampScreenBrightness(Math.round(value * PowerManager.BRIGHTNESS_ON));
+    if (mScreenAutoBrightness != newScreenAutoBrightness) {
+        mScreenAutoBrightness = newScreenAutoBrightness;
+        //是否主动调用DPC中进行背光的更新
+        if (sendUpdate) {
+            mCallbacks.updateBrightness();
+        }
+    }
+}
+```
+在这个方法中，通过当前的Lux值从mBrightnessMapper中获取到了最终的背光值，我们来看看是如何获取得到背光值的：
+
+```java
+@Override
+public float getBrightness(float lux) {
+//先根据Lux值，从mBrightnessSpline曲线中寻找对应的Nit值
+    float nits = mBrightnessSpline.interpolate(lux);
+//再根据Nit值，从mNitsToBacklightSpline曲线中寻找读应的背光值
+    float backlight = mNitsToBacklightSpline.interpolate(nits);
+    return backlight;
+}
+```
+从这个方法可以得知读取自动背光值的原理:首先会根据当前的Lux值，从mBrightnessSpline曲线中寻找对应的Nit值，然后根据Nit值，从曲线mNitsToBacklightSpline中获取到最终的背光值。在分析样条曲线的创建时已知道，mBrightnessSpline曲线是由Lux值数组和它对应的Nit值数组创建，mNitsToBacklightSpline是由配置文件中的config_screenBrightnessNits和config_screenBrightnessBacklight创建。具体的创建在computeSline()方法中。
+
+经过以上的分析，自动背光的获取及和配置数组值的关系，可以用下图来表示：
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200525143036715.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+##### 2.5 adjustment值的计算
+在android 8.1中，当用户在开启自动背光的场景下手动拖动亮度条调节时，实际上是调用setScreenAutoBrightnessAdjustment()方法调整了自动背光调整值，然后通过自动背光调整值计算得出新的自动背光值。
+
+在9.0中，则完全不同，它会直接设置用户选择的亮度值作为设备新的背光值，还会将此时的环境光强Lux值和设置的亮度值作为创建样条曲线的控制点添加到创建样条曲线的数组中，并重新创建样条曲线，我们可以通过Log来简单的查看，在用户未设置亮度前，系统根据配置值创建的曲线控制点如下(格式为(Lux，backlight)):
+
+```java
+BrightnessMappingStrategy: [PLOG 1544753613130] curve: unadjusted curve: 
+[(0.0,0.11764706),
+(16.0,0.1579153),
+(32.0,0.19611156),
+(50.0,0.23574594),
+(100.0,0.27560648),
+(140.0,0.3135872),
+(180.0,0.39658308),
+(240.0,0.39658308),
+(300.0,0.39658308),
+(600.0,0.39658308),
+(800.0,0.39658308),
+(1000.0,0.7058824),
+(2000.0,0.783783),
+(3000.0,0.8235294),
+(4000.0,0.84214103),
+(5000.0,0.8603607),
+(6000.0,0.90202725),
+(8000.0,1.0),
+(10000.0,1.0),]
+```
+当用户将亮度设置为最大后，将变成：
+
+```java
+BrightnessMappingStrategy: [PLOG 1544753876189] curve: smoothed curve:
+[(0.0,0.4899973),
+(16.0,0.54051536),
+(32.0,0.58098876),
+(50.0,0.6177528),
+(100.0,0.6507734),
+(140.0,0.67939043),
+(180.0,0.7347023),
+(240.0,0.7347023),
+(300.0,0.7347023),
+(600.0,0.7347023),
+(800.0,0.7347023),
+(1000.0,0.8903842),
+(1505.0,1.0),
+(2000.0,1.0),
+(3000.0,1.0),
+(4000.0,1.0),
+(5000.0,1.0),
+(6000.0,1.0),
+(8000.0,1.0),
+(10000.0,1.0),]
+```
+其中(1505.0,1.0)这组值正是用户设置亮度时的Lux值和设置的背光值,其余的点也进行了对应的调整。
+
+除此之外，在android 9.0中，自动背光的调整值将不再由用户主动设置(虽然在DMS中保留了setTemporaryAutoBrightnessAdjustment()用于调整adjustment值)，而是根据用户的调整自动进行推断得出。下面就从代码中开始分析这些新机制的实现。
+
+当通过亮度条调节亮度时，将调用进入DisplayPowerController(以下简称DPC)的setTemporaryAutoBrightnessAdjustment()方法，并执行手动亮度调节流程，然后执行自动背光控制器的配置流程.由于用户对亮度的手动设置，因此将有:
+
+- mLastUserSetScreenBrightness发生改变，由默认0变为用户设置的亮度值;
+- userSetBrightnessChanged由false变为true。
+
+此时这两个值已经发生改变，但其他值还未发生变化。
+那么结合AutomaticBrightnessController(以下简称ABC)的配置，在调用configure()方法时将调用setScreenBrightnessByUser()方法，这个方法在2.4中说过了，用于将用户拖动亮度条设置的亮度和当时的Lux值添加到用于创建曲线的数组中，具体是调用BrigtnessMappingStrategy对象的addUserDataPoint()方法实现，而这个方法中，将会通过计算得出新的adjustment值来，该方法如下：
+
+addUserDataPoint()
+
+```java
+@Override
+public void addUserDataPoint(float lux, float brightness) {
+    //获取默认配置值创建的曲线中Lux值对应的背光值
+    float unadjustedBrightness = getUnadjustedBrightness(lux);
+    //通过传入的三个值推段自动背光调整值
+    float adjustment = inferAutoBrightnessAdjustment(mMaxGamma,
+            brightness /* desiredBrightness */,
+            unadjustedBrightness /* currentBrightness */);
+    //更新自动背光调整值
+    mAutoBrightnessAdjustment = adjustment;
+    //表示用户在开启自动背光情况下拖动亮度条调节亮度时的当时Lux值
+    mUserLux = lux;
+    //表示用户在开启自动背光情况下拖动亮度条调节亮度值
+    mUserBrightness = brightness;
+    //重新创建曲线
+    computeSpline();
+}
+```
+在这个方法中，首先将从配置文件中的数组值创建的原始样条曲线中获取当前Lux的值，使用getUnadjustedBrightness()方法：
+
+```java
+private float getUnadjustedBrightness(float lux) {
+    //得到BrightnessConfiguration中的Lux-Nit映射
+    Pair<float[], float[]> curve = mConfig.getCurve();
+    //创建一个Lux-Nit样条曲线
+    Spline spline = Spline.createSpline(curve.first, curve.second);
+    //根据Lux值得到Nit值，再根据Nit值从mNitsToBacklightSpline得到相对应的背光值
+    return mNitsToBacklightSpline.interpolate(spline.interpolate(lux));
+}
+```
+然后将开始计算自动背光调整值，调用inferAutoBrightnessAdjustment()方法，并且将根据配置文件中的MaxGamma值、从原始样条曲线中获取的此Lux对应的背光值以及用户所希望要设置的背光值，计算出adjustment：
+
+inferAutoBrightnessAdjustment()
+
+```java
+//推断adjustment值
+private static float inferAutoBrightnessAdjustment(float maxGamma,
+        float desiredBrightness, float currentBrightness) {
+    float adjustment = 0;
+    float gamma = Float.NaN;
+    // 当前Lux值对应的默认配置亮度值 <=25.5 || >= 229.5
+    if (currentBrightness <= 0.1f || currentBrightness >= 0.9f) {
+        adjustment = (desiredBrightness - currentBrightness);
+    //亮度为0,最低只能是6，貌似不可能
+    } else if (desiredBrightness == 0) {
+        adjustment = -1;
+    //最大亮度，255
+    } else if (desiredBrightness == 1) {
+        adjustment = +1;
+    } else {
+        // current^gamma = desired => gamma = log[current](desired)
+        //根据换底公式，得到currentBrightness为底desiredBrightness的对数
+        gamma = MathUtils.log(desiredBrightness) / MathUtils.log(currentBrightness);
+        // max^-adjustment = gamma => adjustment = -log[max](gamma)
+        //maxGamma为底gamma的对数
+        adjustment = -MathUtils.log(gamma) / MathUtils.log(maxGamma);
+    }
+    adjustment = MathUtils.constrain(adjustment, -1, +1);
+    return adjustment;
+}
+```
+在这个方法中可以看出，adjustment的计算由两个计算步骤得到，大概解释一下就是：current的gamma次方等于desired，从而得出gamma，而gamma又等于maxGamma的-adjustment次方，从而得出adjustment。
+
+到这里，自动背光的调整值adjustment已经计算出了，接下来再看看有了adjustment后如何调整背光样条曲线。
+
+回到addUserDataPoint()方法中，计算完毕adjustment后，会将用户设置的Lux和Brightness分别赋给BrightnessMappingStrategy对象成员mUserLux和mUserBrightness，并调用computeSpline()重新创建样条曲线，这个方法在2.2中分析了，但是对其中调用的getAdjustedCurve()没有分析，此处正适合对它做一个了解，该方法如下：
+
+getAdjustedCurve()
+
+```java
+/**
+ * 得到调整弧度
+ * @param lux Lux值数组
+ * @param brightness 根据Lux值->Lux值对应的Nits值->Nits-Backlight曲线得到的最终背光值数组
+ * @param userLux 当前Lux值？
+ * @param userBrightness 当前用户设置亮度值？
+ * @param adjustment 自动背光调整值
+ * @param maxGamma 最大Gama值
+ * @return
+ */
+private static Pair<float[], float[]> getAdjustedCurve(float[] lux, float[] brightness,
+        float userLux, float userBrightness, float adjustment, float maxGamma) {
+    //初始化两个新数组，分别存储Lux值和背光值
+    float[] newLux = lux;
+    float[] newBrightness = Arrays.copyOf(brightness, brightness.length);
+    //限定adjustment为[-1,1]
+    adjustment = MathUtils.constrain(adjustment, -1, 1);
+    //maxGamma 的 -adjustment次方得到gamma值
+    float gamma = MathUtils.pow(maxGamma, -adjustment);
+    //gamma != 1说明adjustment不为0
+    if (gamma != 1) {
+        //重新设置亮度值，新的亮度值为就亮度值的gamma次方
+        for (int i = 0; i < newBrightness.length; i++) {
+            newBrightness[i] = MathUtils.pow(newBrightness[i], gamma);
+        }
+    }
+    //用户在BrightnessController拖动条上手动调节了亮度
+    if (userLux != -1) {
+        //插入一对新的Lux和对应背光值
+        Pair<float[], float[]> curve = insertControlPoint(newLux, newBrightness, userLux,
+                userBrightness);
+        newLux = curve.first;
+        newBrightness = curve.second;
+    }
+    return Pair.create(newLux, newBrightness);
+}
+```
+在以上方法中，通过adustment值获取gamma值，再通过gamma值调整整个背光数组元素，仔细一看，其实在这里，计算新的亮度值的算法，就是inferAutoBrightnessAdjustment()中的反操作，这里是通过adjustment得到gamma，再由gamma得到新的背光值数组。
+
+计算出新的背光值后，调用insertControlPoint()将用户设置的点作为曲线控制点插入相关数组中：
+
+```java
+private static Pair<float[], float[]> insertControlPoint(
+        float[] luxLevels, float[] brightnessLevels, float lux, float brightness) {
+    //找到插入点索引，以保持值的递增
+    final int idx = findInsertionPoint(luxLevels, lux);
+    final float[] newLuxLevels;
+    final float[] newBrightnessLevels;
+    //如果插入索引等于数组长度，则：
+    if (idx == luxLevels.length) {
+        //需要插入到末尾位置，且新Lux数组长度比原来大1
+        newLuxLevels = Arrays.copyOf(luxLevels, luxLevels.length + 1);
+        newBrightnessLevels  = Arrays.copyOf(brightnessLevels, brightnessLevels.length + 1);
+        newLuxLevels[idx] = lux;
+        newBrightnessLevels[idx] = brightness;
+    //如果用户lux值已处于Lux值数组中，则：
+    } else if (luxLevels[idx] == lux) {
+        //copy原数组即可
+        newLuxLevels = Arrays.copyOf(luxLevels, luxLevels.length);
+        newBrightnessLevels = Arrays.copyOf(brightnessLevels, brightnessLevels.length);
+        newBrightnessLevels[idx] = brightness;
+    //否则：
+    } else {
+        //初始化新Lux数组，长度比原数组大1
+        newLuxLevels = Arrays.copyOf(luxLevels, luxLevels.length + 1);
+        //将原数组从idx位置起的元素，向后移动1位，将新的Lux值插入到idx位置
+        System.arraycopy(newLuxLevels, idx, newLuxLevels, idx+1, luxLevels.length - idx);
+        newLuxLevels[idx] = lux;
+        //初始化新亮度值数组，长度比原数组大1
+        newBrightnessLevels  = Arrays.copyOf(brightnessLevels, brightnessLevels.length + 1);
+        //将原数组从idx位置起的元素，向后移动1位，将新的亮度值值插入到idx位置
+        System.arraycopy(newBrightnessLevels, idx, newBrightnessLevels, idx+1,
+                brightnessLevels.length - idx);
+        newBrightnessLevels[idx] = brightness;
+    }
+    //平滑曲线，newLuxLevels之后的Lux对应的亮度值将全部为newBrightnessLevels
+    smoothCurve(newLuxLevels, newBrightnessLevels, idx);
+    return Pair.create(newLuxLevels, newBrightnessLevels);
+}
+```
+该方法调用完毕后，返回一个携带有Lux和背光值的Pair对象给getAdjustedCurve(),在getAdjustedCurve()中将返回该Pair对象给到computeSpline()中，在computeSpline()将从返回的Pair对像中取出Lux数组值和背光数组值，完成曲线的创建。
+
+这些逻辑执行完毕后，回到configure()方法，接下来将由LSensor检测环境光强、调节亮度…这些流程就不再说明。
+
+我们再回到DisplayPowerController中updatePowerState()中，当configure()执行完毕后，DPC中将拿到调整后的adjustment值，并完成保存，这部分代码如下：
+
+```java
+private void updatePowerState() {
+//......
+
+    if (brightness < 0) {
+        float newAutoBrightnessAdjustment = autoBrightnessAdjustment;
+        if (autoBrightnessEnabled) {
+//获取自动背光亮度值
+            brightness = mAutomaticBrightnessController.getAutomaticScreenBrightness();
+//获取新的adjustment值
+            newAutoBrightnessAdjustment =
+                    mAutomaticBrightnessController.getAutomaticScreenBrightnessAdjustment();
+        }
+
+        if (brightness >= 0) {
+
+            brightness = clampScreenBrightness(brightness);
+            if (mAppliedAutoBrightness && !autoBrightnessAdjustmentChanged) {
+                slowChange = true; // slowly adapt to auto-brightness
+            }
+            putScreenBrightnessSetting(brightness);
+            mAppliedAutoBrightness = true;
+        } else {
+            mAppliedAutoBrightness = false;
+        }
+        if (autoBrightnessAdjustment != newAutoBrightnessAdjustment) {
+            //将adjustment值保存到SettingsProvider中
+            putAutoBrightnessAdjustmentSetting(newAutoBrightnessAdjustment);
+        }
+    } else {
+        mAppliedAutoBrightness = false;
+    }
+//......
+}
+```
+在此处，会将ABC中计算得出的adjustment保存在SettingsProvider中，以确保Settings等其他进程对它的使用:
+
+```java
+private void putAutoBrightnessAdjustmentSetting(float adjustment) {
+    mAutoBrightnessAdjustment = adjustment;
+    Settings.System.putFloatForUser(mContext.getContentResolver(),
+            Settings.System.SCREEN_AUTO_BRIGHTNESS_ADJ, adjustment, UserHandle.USER_CURRENT);
+}
+```
+##### 2.6 清除用户设置数据
+使用ABC的resetShortTermModel()可以清除用户设置的亮度和对应Lux时,那么何时清除用户设置的背光值和对应Lux值呢？有以下三种情况:
+
+###### 2.6.1 切换用户
+相关代码如下：
+
+```java
+private void handleSettingsChange(boolean userSwitch) {
+    if (userSwitch) {
+        if (mAutomaticBrightnessController != null) {
+            mAutomaticBrightnessController.resetShortTermModel();
+        }
+    }
+}
+```
+###### 2.6.2 BrightnessConfigure对象发生变化
+这种情况在2.4中了解setBrightnessConfiguration()时已分析过。
+
+###### 2.6.3 屏幕进入不可交互状态超过30s，且再次进入交互状态后环境光强有一定范围变化
+在分析setDisplayPolicy()时说到，若屏幕由交互状态进入非交互状态时，将会发送一个延时Handler消息，并在到达时间后，将mShortTermModelValid值设置为false，那么如果当屏幕状态再进入交互状态时，肯定会有设置Lux值的流程,而就在这个流程中，mShortTermModelValid的含义将彰显出来：
+
+```java
+private void setAmbientLux(float lux) {
+
+    mAmbientLux = lux;
+    mBrighteningLuxThreshold = mHysteresisLevels.getBrighteningThreshold(lux);
+    mDarkeningLuxThreshold = mHysteresisLevels.getDarkeningThreshold(lux);
+
+    // If the short term model was invalidated and the change is drastic enough, reset it.
+    if (!mShortTermModelValid && mShortTermModelAnchor != -1) {
+        //SHORT_TERM_MODEL_THRESHOLD_RATIO = 0.6
+        final float minAmbientLux =
+            mShortTermModelAnchor - mShortTermModelAnchor * SHORT_TERM_MODEL_THRESHOLD_RATIO;
+        final float maxAmbientLux =
+            mShortTermModelAnchor + mShortTermModelAnchor * SHORT_TERM_MODEL_THRESHOLD_RATIO;
+        //如果环境光强介于这个值之间，则不会reset，否则reset
+        if (minAmbientLux < mAmbientLux && mAmbientLux < maxAmbientLux) {
+            mShortTermModelValid = true;
+        } else {
+            resetShortTermModel();
+        }
+    }
+}
+```
+在这个方法中，只有进入非交互状态时mShortTermModelValid才会为false，表示将用户设置置为无效状态，但不会立即置为无效状态，只有环境光强发生较大变化时才会重置用户设置，这个"较大变化"即是大于当前光强的0.6倍或者小于当前光强的0.6倍时。
+
+关于android 9.0自动背光，就先了解这么多。此外，从代码结构来看，还增加了BrightnessTracker等类，这个类会对用户自动背光亮度进行一些记录，就暂时不进行分析了。
+

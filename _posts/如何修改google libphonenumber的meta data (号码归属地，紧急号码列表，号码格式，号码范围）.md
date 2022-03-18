@@ -1,0 +1,60 @@
+﻿**[DESCRIPTION]**
+ 如果需要修改google libphonenumber里的meta data (比如国家的local emergency number, number format, 号码归属地），可以根据以下SOP进行修改。
+ 
+**[SOLUTION]**
+修改步骤：
+1. 查看使用的版本信息，版本信息路径：external/libphonenumber/README.version
+    Ex:
+```
+Version: 8.3.3
+```
+
+2. 从github下载对应的libphonenumber版本,github路径：https://github.com/googlei18n/libphonenumber
+版本下载地址：https://github.com/googlei18n/libphonenumber/releases
+3. 修改对应的xml（不同的号码信息对应不同的xml）
+1). 修改号码格式, 号码范围，请修改PhoneNumberMetadata.xml: https://github.com/googlei18n/libphonenumber/blob/2eafc96bbc35230c55d8a7e93257360fcfec161f/resources/PhoneNumberMetadata.xml
+2). 修改当地紧急号码，请修改ShortNumberMetadata.xml: https://github.com/googlei18n/libphonenumber/blob/2eafc96bbc35230c55d8a7e93257360fcfec161f/resources/ShortNumberMetadata.xml
+3). 修改号码归属地，请修改: https://github.com/googlei18n/libphonenumber/tree/2eafc96bbc35230c55d8a7e93257360fcfec161f/resources/geocoding
+4. 根据google提供的方法重新build meta data
+How to make metadata changes
+https://github.com/googlei18n/libphonenumber/blob/master/making-metadata-changes.md
+5. 用新生成的data文件替换原有文件 (external/libphonenumber/libphonenumber/src/com/google/i18n/phonenumbers/data/)
+ 
+**[Example]**
+当地紧急号码示例（正则表达式）
+local emergency number(ShortNumberMetadata.xml):
+
+```xml
+<!-- China -->
+<!-- http://www.itu.int/oth/T020200002B/en -->
+<territory id="CN">
+...
+<emergency>
+<nationalNumberPattern>
+1(?:
+1[09]|
+20
+)
+</nationalNumberPattern>
+<possibleLengths national="3"/>
+<exampleNumber>119</exampleNumber>
+</emergency>
+</territory>
+```
+号码格式实例（蓝字部分）
+number format (PhoneNumberMetadata.xml)：
+
+```xml
+<!-- China -->
+<!-- The international/national prefix patterns must not collide with valid prefixes such
+as 170, 176, 177 and 178. 179XX00 is a valid calling prefix, see: www.chahaoba.com/179 -->
+<territory id="CN" countryCode="86" internationalPrefix="(1(?:[129]\d{3}|79\d{2}))?00"
+preferredInternationalPrefix="00" nationalPrefix="0"
+nationalPrefixForParsing="(1(?:[129]\d{3}|79\d{2}))|0">
+...
+<numberFormat pattern="(\d{3})(\d{4})(\d{4})" carrierCodeFormattingRule="$CC $FG">
+<leadingDigits>1[3-578]</leadingDigits>
+<format>$1 $2 $3</format>
+</numberFormat>
+```
+

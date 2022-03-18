@@ -1,0 +1,137 @@
+﻿@[toc]
+##### 1. About Enhancement 4G mode
+use LTE services to improve voice and other communications
+##### 2. Set on/off
+Settings->more->cellular networks->VoLTE
+##### 3. Save
+the setting result save to SystemProperties:PROPERTY_VOLTE_ENALBE
+##### 4. Setting on/off flow:
+packages/services/Telephony/src/com/android/phone/MobileNetworkSettings.java
+```java
+public boolean onPreferenceChange(Preference preference, Object objValue) {
+	...
+	mImsMgr.setEnhanced4gLteModeSetting(mButton4glte.isChecked());
+	...
+}
+```
+frameworks/opt/net/ims/src/java/com/android/ims/ImsManager.java
+
+```java
+public void setEnhanced4gLteModeSetting(boolean enabled) {
+	...
+	SubscriptionManager.setSubscriptionProperty(subId,
+                        SubscriptionManager.ENHANCED_4G_MODE_ENABLED,
+                        booleanToPropertyString(enabled));
+    ...
+    setAdvanced4GMode(enabled);
+    ...
+}
+```
+frameworks/base/telephony/java/android/telephony/SubscriptionManager.java
+
+```java
+public static void setSubscriptionProperty(int subId, String propKey, String propValue) {
+    try {
+        ISub iSub = ISub.Stub.asInterface(ServiceManager.getService("isub"));
+        if (iSub != null) {
+            iSub.setSubscriptionProperty(subId, propKey, propValue);
+        }
+    } catch (RemoteException ex) {
+        // ignore it
+    }
+}
+
+//frameworks/opt/telephony/src/java/com/android/internal/telephony/SubscriptionController.java
+public int setSubscriptionProperty(int subId, String propKey, String propValue){...}
+```
+frameworks/opt/net/ims/src/java/com/android/ims/ImsManager.java
+```java
+private void setAdvanced4GMode(boolean turnOn) throws ImsException {
+    checkAndThrowExceptionIfServiceUnavailable();
+    // if turnOn: first set feature values then call turnOnIms()
+    // if turnOff: only set feature values if IMS turn off is not allowed. If turn off is
+    // allowed, first call turnOffIms() then set feature values
+    if (turnOn) {
+        setLteFeatureValues(turnOn);
+        log("setAdvanced4GMode: turnOnIms");
+        turnOnIms();
+    } else {
+        if (isImsTurnOffAllowed()) {
+            log("setAdvanced4GMode: turnOffIms");
+            turnOffIms();
+        }
+        setLteFeatureValues(turnOn);
+    }
+}
+
+private void setLteFeatureValues(boolean turnOn) {
+    log("setLteFeatureValues: " + turnOn);
+    CapabilityChangeRequest request = new CapabilityChangeRequest();
+    if (turnOn) {
+        request.addCapabilitiesToEnableForTech(
+                MmTelFeature.MmTelCapabilities.CAPABILITY_TYPE_VOICE,
+                ImsRegistrationImplBase.REGISTRATION_TECH_LTE);
+    } else {
+        request.addCapabilitiesToDisableForTech(
+                MmTelFeature.MmTelCapabilities.CAPABILITY_TYPE_VOICE,
+                ImsRegistrationImplBase.REGISTRATION_TECH_LTE);
+    }
+
+    if (isVtEnabledByPlatform()) {
+        boolean ignoreDataEnabledChanged = getBooleanCarrierConfig(
+                CarrierConfigManager.KEY_IGNORE_DATA_ENABLED_CHANGED_FOR_VIDEO_CALLS);
+        boolean enableViLte = turnOn && isVtEnabledByUser() &&
+                (ignoreDataEnabledChanged || isDataEnabled());
+        if (enableViLte) {
+            request.addCapabilitiesToEnableForTech(
+                    MmTelFeature.MmTelCapabilities.CAPABILITY_TYPE_VIDEO,
+                    ImsRegistrationImplBase.REGISTRATION_TECH_LTE);
+        } else {
+            request.addCapabilitiesToDisableForTech(
+                    MmTelFeature.MmTelCapabilities.CAPABILITY_TYPE_VIDEO,
+                    ImsRegistrationImplBase.REGISTRATION_TECH_LTE);
+        }
+    }
+    try {
+        mMmTelFeatureConnection.changeEnabledCapabilities(request, null);
+    } catch (RemoteException e) {
+        Log.e(TAG, "setLteFeatureValues: Exception: " + e.getMessage());
+    }
+}
+
+//frameworks/opt/net/ims/src/java/com/android/ims/MmTelFeatureConnection.java
+public void changeEnabledCapabilities(CapabilityChangeRequest request,
+        IImsCapabilityCallback callback) throws RemoteException {
+    synchronized (mLock) {
+        checkServiceIsReady();
+        getServiceInterface(mBinder).changeCapabilitiesConfiguration(request, callback);
+    }
+}
+
+//frameworks/base/telephony/java/android/telephony/ims/feature/MmTelFeature.java
+public void changeCapabilitiesConfiguration(CapabilityChangeRequest request,
+                IImsCapabilityCallback c) {
+   synchronized (mLock) {
+       MmTelFeature.this.requestChangeEnabledCapabilities(request, c);
+   }
+}
+
+//frameworks/base/telephony/java/android/telephony/ims/feature/ImsFeature.java
+public final void requestChangeEnabledCapabilities(CapabilityChangeRequest request,
+            IImsCapabilityCallback c) {
+    if (request == null) {
+        throw new IllegalArgumentException(
+                "ImsFeature#requestChangeEnabledCapabilities called with invalid params.");
+    }
+    changeEnabledCapabilities(request, new CapabilityCallbackProxy(c));
+}
+
+public abstract void changeEnabledCapabilities(CapabilityChangeRequest request,
+            CapabilityCallbackProxy c);
+//该方法为抽象方法，需要功能部件自己去实现，这部分在MTK&高通平台有不同实现
+```
+
+
+
+##### 5. 流程时序图
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200522165751623.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)

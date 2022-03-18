@@ -1,0 +1,441 @@
+﻿@[TOC](文章目录)
+#### 一、前言
+上一篇我们对Service类型的ANR做了介绍，本篇我们将集合源码，对四种ANR类型中的Broadcast Timeout类型的触发机制做详尽的介绍。
+#### 二、Broadcast Timeout
+在ActivityManagerService 中,构造了两种Broadcast timeout,分别是 前台FG 10s和
+后台BG 60s.
+
+mFgBroadcastQueue/mBgBroadcastQueue ⽤来表示foreground和background
+⼴播队列.
+⾸先看下如下⼏个数据的定义:
+
+```java
+//frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java
+// How long we allow a receiver to run before giving up on it.
+ static final int BROADCAST_FG_TIMEOUT = 10*1000;
+ static final int BROADCAST_BG_TIMEOUT = 60*1000;
+ mFgBroadcastQueue = new BroadcastQueue(this, mHandler, "foreground",
+		BROADCAST_FG_TIMEOUT, false);
+ mBgBroadcastQueue = new BroadcastQueue(this, mHandler, "background",
+        BROADCAST_BG_TIMEOUT, true);
+```
+
+```java
+//frameworks/base/services/core/java/com/android/server/am/BroadcastQueue.java
+/**
+ * Lists of all active broadcasts that are to be executed
+immediately
+ * (without waiting for another broadcast to finish). 
+Currently this only
+ * contains broadcasts to registered receivers, to avoid
+spinning up
+ * a bunch of processes to execute IntentReceiver
+components. Background-
+ * and foreground-priority broadcasts are queued
+separately.
+ */
+ /**
+ * 并⾏⼴播队列，可以⽴刻执⾏，⽽⽆需等待另⼀个⼴播运⾏完成，该队列只允
+许动态已注册的⼴播，
+ * 从⽽避免发⽣同时拉起⼤量进程来执⾏⼴播，前台的和后台的⼴播分别位于独
+⽴的队列。
+ */
+ final ArrayList<BroadcastRecord> mParallelBroadcasts = new
+ArrayList<>();
+ /**
+ * List of all active broadcasts that are to be executed
+one at a time.
+ * The object at the top of the list is the currently
+activity broadcasts;
+ * those after it are waiting for the top to finish. As
+with parallel
+ * broadcasts, separate background- and foreground-priority
+queues are
+ * maintained.
+ */
+ /**
+ *有序⼴播队列，同⼀时间只允许执⾏⼀个⼴播，该队列顶部的⼴播便是活动⼴
+播，
+ *其他⼴播必须等待该⼴播结束才能运⾏，和并⾏⼴播队列⼀样也是独⽴区别前
+台的和后台的⼴播。
+ */
+ final ArrayList<BroadcastRecord> mOrderedBroadcasts = new
+ArrayList<>();
+```
+#### 三、Broadcast 设置 定时器
+调⽤ processNextBroadcast来处理⼴播.其流程为先处理并⾏⼴播,再处理当前有序
+⼴播,最后获取并处理下条有序⼴播.
+
+```java
+//frameworks/base/services/core/java/com/android/server/am/BroadcastQueue.java
+BroadcastQueue(ActivityManagerService service, Handler handler,
+ 		String name, long timeoutPeriod, boolean
+		allowDelayBehindServices) {
+	 mService = service;
+	 mHandler = new BroadcastHandler(handler.getLooper());
+	 mQueueName = name;
+	 mTimeoutPeriod = timeoutPeriod;
+	 mDelayBehindServices = allowDelayBehindServices; 
+} 
+```
+**processNextBroadcast** 最终会调⽤processNextBroadcastLocked (fromMsg
+=false).
+此处mService为ActivityManagerService，整个流程还是⽐较⻓的，全程持有AMS
+锁，这个⽅法⽐较⻓,我省略的部分不在这⾥重点关注的部分.所以⼴播的队列很⻓的
+话，直接会严重影响这个⼿机的性能与流畅度,这⾥可以做⼀个监控,看看系统处理⼴
+播都需要hold 多久的ams lock.
+
+整个processNextBroadcast的流程⼤致分为下⾯⼏个步骤:
+1. 设置⼴播超时延时消息,设置定时器: setBroadcastTimeoutLocked:
+2. 处理并⾏⼴播 mParallelBroadcasts 执⾏
+deliverToRegisteredReceiverLocked
+3. 处理有序⼴播mOrderedBroadcasts当⼴播接收者等待时间过⻓， now > now >
+r.dispatchTime + (2*mTimeoutPeriod*numReceivers) r.dispatchTime + (2*mTimeoutPeriod*numReceivers) 则调⽤
+broadcastTimeoutLocked(false) 则强制结束这条⼴播;
+
+```java
+ final void processNextBroadcast(boolean fromMsg) {
+ 	synchronized (mService) {
+ 		processNextBroadcastLocked(fromMsg, false);
+ 	}
+ }
+ final void processNextBroadcastLocked(boolean fromMsg, boolean skipOomAdj) {
+ 	BroadcastRecord r;
+ 	//...省略
+ 	//【1】处理并⾏⼴播 mParallelBroadcasts
+ 	while (mParallelBroadcasts.size() > 0) {
+		 r = mParallelBroadcasts.remove(0);
+		 r.dispatchTime = SystemClock.uptimeMillis();
+		 r.dispatchClockTime = System.currentTimeMillis();
+		 final int N = r.receivers.size();
+		 for (int i=0; i<N; i++) {
+			 Object target = r.receivers.get(i);
+			 //分发⼴播给已注册的receiver
+			 deliverToRegisteredReceiverLocked(r, (BroadcastFilter)target, false, i);
+		 }
+		 //添加⼴播历史统计
+		 addBroadcastToHistoryLocked(r);
+	}
+	 // Now take care of the next serialized one...
+	 // mPendingBroadcast正常情况下是空的,如果不是空,说明当前有需
+	要处理的⼴播,⼀般只有在
+	 // 等待⽬标进程启动来处理对应的⼴播的情况下会出现,这个情况下就仅
+	仅检查进程是否存在.
+	 if (mPendingBroadcast != null) {
+		 boolean isDead;
+		 if (mPendingBroadcast.curApp.pid > 0) {
+			 synchronized (mService.mPidsSelfLocked) {
+				 ProcessRecord proc =
+				 mService.mPidsSelfLocked.get(
+				 mPendingBroadcast.curApp.pid);
+				 isDead = proc == null || proc.crashing;
+	 		}
+		 } else {
+ 			final ProcessRecord proc =
+			mService.mProcessNames.get(mPendingBroadcast.curApp.processName,
+					mPendingBroadcast.curApp.uid);
+ 			isDead = proc == null || !proc.pendingStart;
+ 		}
+ 		if (!isDead) {
+	 		// It's still alive, so keep waiting
+	 		// 进程还存在,没有死亡,继续等待.
+ 			return;
+ 		} else {
+ 			//进程已经死亡,清空mPendingBroadcast,忽略当前⼴播.
+ 			mPendingBroadcast.state =
+			BroadcastRecord.IDLE;
+ 			mPendingBroadcast.nextReceiver =
+			mPendingBroadcastRecvIndex;
+ 			mPendingBroadcast = null;
+ 		}
+ }
+ boolean looped = false;
+ //【2】 处理有序⼴播mOrderedBroadcasts
+ do {
+	 if (mOrderedBroadcasts.size() == 0) {
+		 // No more broadcasts pending, so all done!
+		 //mOrderedBroadcasts 有序⼴播队列没有需要处理的⼴播,直接返回.
+		 mService.scheduleAppGcsLocked();
+		 if (looped) {
+			 // If we had finished the last ordered broadcast, then
+			 // make sure all processes have correct oom and sched
+			 // adjustments.
+			 mService.updateOomAdjLocked();
+		 }
+ 		return;
+ }
+ //获取有序⼴播的第⼀个⼴播
+ r = mOrderedBroadcasts.get(0);
+ boolean forceReceive = false;
+ // Ensure that even if something goes awry with the timeout
+ // detection, we catch "hung" broadcasts here, discard them,
+ // and continue to make progress.
+ // This is only done if the system is ready so that PRE_BOOT_COMPLETED
+ // receivers don't get executed with timeouts. They're intended for
+ // one time heavy lifting after system upgrades and can take
+ // significant amounts of time.
+ int numReceivers = (r.receivers != null) ? r.receivers.size() : 0;
+ if (mService.mProcessesReady && r.dispatchTime > 0) {
+ 	long now = SystemClock.uptimeMillis();
+ 	if ((numReceivers > 0) && (now > r.dispatchTime + (2*mTimeoutPeriod*numReceivers))) {
+	 	//...
+	 	//当⼴播处理时间超时，则强制结束这条⼴播
+	 	broadcastTimeoutLocked(false); // forcibly finish this broadcast
+	 	forceReceive = true;
+	 	r.state = BroadcastRecord.IDLE;
+ 	}
+ }
+ //...省略
+ if (r.receivers == null || r.nextReceiver >= numReceivers || r.resultAbort || forceReceive) {
+	 // No more receivers for this broadcast! Send the final
+	 // result if requested...
+	 if (r.resultTo != null) {
+		 //处理⼴播消息消息，调⽤到onReceive()
+		 performReceiveLocked(r.callerApp, r.resultTo, new Intent(r.intent), r.resultCode,
+		 		r.resultData, r.resultExtras, false, false, r.userId);
+		 // Set this to null so that the reference
+		 // (local and remote) isn't kept in the mBroadcastHistory.
+		 r.resultTo = null;
+ 	 }
+ 	if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Cancelling BROADCAST_TIMEOUT_MSG");
+ 	//【3】取消BROADCAST_TIMEOUT_MSG消息
+ 	cancelBroadcastTimeoutLocked();
+ 	// ... and on to the next...
+ 	addBroadcastToHistoryLocked(r);
+ 	//...省略
+ }
+ mOrderedBroadcasts.remove(0);
+ r = null;
+ looped = true;
+ continue;
+ }
+ } while (r == null);
+ 	// Get the next receiver...
+ 	int recIdx = r.nextReceiver++;
+ 	// Keep track of when this receiver started, and make sure there
+ 	// is a timeout message pending to kill it if need be.
+ 	r.receiverTime = SystemClock.uptimeMillis();
+ 	if (recIdx == 0) {
+ 		r.dispatchTime = r.receiverTime;
+ 		r.dispatchClockTime = System.currentTimeMillis();
+ 		//...
+ 	}
+ 	if (! mPendingBroadcastTimeoutMessage) {
+ 		long timeoutTime = r.receiverTime + mTimeoutPeriod;
+ 		//【4】设置Broadcast timeout
+ 		setBroadcastTimeoutLocked(timeoutTime);
+ 	}
+ 	final BroadcastOptions brOptions = r.options;
+ 	final Object nextReceiver = r.receivers.get(recIdx);
+ 	if (nextReceiver instanceof BroadcastFilter) {
+ 		// Simple case: this is a registered receiver who gets a direct call.
+ 		BroadcastFilter filter = (BroadcastFilter)nextReceiver;
+ 
+ 		deliverToRegisteredReceiverLocked(r, filter, r.ordered, recIdx);
+ 			if (r.receiver == null || !r.ordered) {
+ 				// The receiver has already finished, so schedule to process the next one.
+ 				r.state = BroadcastRecord.IDLE;
+ 				scheduleBroadcastsLocked();
+ 			} else {
+ 				if (brOptions != null &&
+						brOptions.getTemporaryAppWhitelistDuration() > 0) {
+ 
+					scheduleTempWhitelistLocked(filter.owningUid,
+ 
+					brOptions.getTemporaryAppWhitelistDuration(), r);
+ 				}
+ 			}
+ 			return;
+ 	}
+ 	//...省略..各种权限检查,⼴播合法性检查
+ 
+ 	// Is this receiver's application already running?
+ 	if (app != null && app.thread != null && !app.killed) {
+ 	try {
+ 		app.addPackage(info.activityInfo.packageName,
+ 
+		info.activityInfo.applicationInfo.versionCode, mService.mProcessStats);
+ 		processCurBroadcastLocked(r, app, skipOomAdj);
+ 		return;
+ 	} catch (RemoteException e) {
+		Slog.w(TAG, "Exception when sending broadcast to " + r.curComponent, e);
+ 	} catch (RuntimeException e) {
+ 		Slog.wtf(TAG, "Failed sending broadcast to " + r.curComponent + " with " + r.intent, e);
+ 		// If some unexpected exception happened, just skip
+ 		// this broadcast. At this point we are not in the call
+ 		// from a client, so throwing an exception out from here
+ 		// will crash the entire system instead of just whoever
+ 		// sent the broadcast.
+ 		logBroadcastReceiverDiscardLocked(r);
+ 		finishReceiverLocked(r, r.resultCode, r.resultData,r.resultExtras, r.resultAbort, false);
+ 		scheduleBroadcastsLocked();
+ 		// We need to reset the state if we failed to start the receiver.
+ 		r.state = BroadcastRecord.IDLE;
+ 		return;
+ 	}
+.
+ }
+ //startProcessLocked 启动待执⾏的APP进程
+ if((r.curApp=mService.startProcessLocked(targetProcess, info.activityInfo.applicationInfo, true,
+ 		r.intent.getFlags() | Intent.FLAG_FROM_BACKGROUND, "broadcast", r.curComponent,
+		(r.intent.getFlags()&Intent.FLAG_RECEIVER_BOOT_UPGRADE) != 0, false, false))
+ 		== null) {
+ 	// Ah, this recipient is unavailable. Finish it
+	if necessary,
+ 	// and mark the broadcast record as ready for the next.
+ 	Slog.w(TAG, "Unable to launch app " + info.activityInfo.applicationInfo.packageName + "/"
+ 		+ receiverUid + " for broadcast "
+ 		+ r.intent + ": process is bad");
+ 	logBroadcastReceiverDiscardLocked(r);
+ 	finishReceiverLocked(r, r.resultCode, r.resultData, r.resultExtras, r.resultAbort, false);
+ 	scheduleBroadcastsLocked();
+ 	r.state = BroadcastRecord.IDLE;
+ 	return;
+ }
+}
+```
+#### 四、Broadcast 重置 定时器
+上⾯代码中 113⾏
+
+```java
+ //【3】取消BROADCAST_TIMEOUT_MSG消息
+ cancelBroadcastTimeoutLocked();
+ //....
+final void cancelBroadcastTimeoutLocked() {
+ 	if (mPendingBroadcastTimeoutMessage) {
+ 		mHandler.removeMessages(BROADCAST_TIMEOUT_MSG, this);
+ 		mPendingBroadcastTimeoutMessage = false;
+ 	}
+}
+```
+处理⼴播消息消息，调⽤应⽤⾃⼰的onReceive(),执⾏成功则调⽤
+cancelBroadcastTimeoutLocked移除BROADCAST_TIMEOUT_MSG消息
+#### 五、Broadcast 触发ANR
+
+```java
+private final class BroadcastHandler extends Handler {
+ 	public BroadcastHandler(Looper looper) {
+ 		super(looper, null, true);
+ 	}
+ 	@Override
+ 	public void handleMessage(Message msg) {
+ 		switch (msg.what) {
+ 			case BROADCAST_TIMEOUT_MSG: {
+ 				synchronized (mService) {
+ 					broadcastTimeoutLocked(true);
+ 				}
+ 			} break;
+ 		}
+ 	}
+}
+//有上⾯可知,fromMsg = true
+final void broadcastTimeoutLocked(boolean fromMsg) {
+ 	if (fromMsg) {
+ 		mPendingBroadcastTimeoutMessage = false;
+ 	}
+ 	if (mOrderedBroadcasts.size() == 0) {
+ 		return;
+ 	}
+ 	long now = SystemClock.uptimeMillis();
+ 	BroadcastRecord r = mOrderedBroadcasts.get(0);
+ 	if (fromMsg) {
+ 		if (!mService.mProcessesReady) {
+ 			// Only process broadcast timeouts if the system is ready. That way
+ 			// PRE_BOOT_COMPLETED broadcasts can't timeout as they are intended
+ 			// to do heavy lifting for system up.
+ 			//只有当system ready时,才会触发broadcast Anr
+ 			return;
+ 		}
+ 		long timeoutTime = r.receiverTime + mTimeoutPeriod;
+ 		if (timeoutTime > now) {
+ 			// We can observe premature timeouts because we do not cancel and reset the
+			// broadcast timeout message after each receiver finishes. Instead, we set up
+			// an initial timeout then kick it down the road a little
+			// further as needed when it expires.
+			//如果当前正在执⾏的receiver没有超时，则重新设置⼴播超时
+ 			if (DEBUG_BROADCAST) Slog.v(TAG_BROADCAST, "Premature timeout ["
+ 				+ mQueueName + "] @ " + now + ": resetting BROADCAST_TIMEOUT_MSG for "
+ 				+ timeoutTime);
+ 			setBroadcastTimeoutLocked(timeoutTime);
+ 			return;
+ 		}
+ 	}
+ 	BroadcastRecord br = mOrderedBroadcasts.get(0);
+ 	if (br.state == BroadcastRecord.WAITING_SERVICES) {
+ 		// In this case the broadcast had already finished, but we had decided to wait
+ 		// for started services to finish as well before
+		// going on. So if we have actually
+ 		// waited long enough time timeout the broadcast, let's give up on the whole thing
+ 		// and just move on to the next.
+ 		//⼴播已经处理完成，但需要等待已启动service执⾏完成。当等待⾜够时间，则处理下⼀条⼴播。
+ 		Slog.i(TAG, "Waited long enough for: " + (br.curComponent != null
+ 				? br.curComponent.flattenToShortString() : "(null)"));
+ 		br.curComponent = null;
+ 		br.state = BroadcastRecord.IDLE;
+ 		processNextBroadcast(false);
+ 		return;
+ 	}
+ 	// If the receiver app is being debugged we quietly ignore unresponsiveness, just
+ 	// tidying up and moving on to the next broadcast without crashing or ANRing this
+ 	// app just because it's stopped at a breakpoint.
+ 	final boolean debugging = (r.curApp != null && r.curApp.debugging);
+ 	Slog.w(TAG, "Timeout of broadcast " + r + " - receiver=" + r.receiver
+ 		+ ", started " + (now - r.receiverTime) + "ms ago");
+ 	r.receiverTime = now;
+ 	if (!debugging) {
+ 		r.anrCount++;
+ 	}
+ 	ProcessRecord app = null;
+ 	String anrMessage = null;
+ 	Object curReceiver;
+ 	if (r.nextReceiver > 0) {
+ 		curReceiver = r.receivers.get(r.nextReceiver-1);
+ 		r.delivery[r.nextReceiver-1] = BroadcastRecord.DELIVERY_TIMEOUT;
+ 	} else {
+ 		curReceiver = r.curReceiver;
+ 	}
+ 	Slog.w(TAG, "Receiver during timeout of " + r + " : " + curReceiver);
+ 	logBroadcastReceiverDiscardLocked(r);
+ 	if (curReceiver != null && curReceiver instanceof BroadcastFilter) {
+ 		BroadcastFilter bf = (BroadcastFilter)curReceiver;
+ 		if (bf.receiverList.pid != 0 && bf.receiverList.pid != ActivityManagerService.MY_PID) {
+ 			synchronized (mService.mPidsSelfLocked) {
+ 				app = mService.mPidsSelfLocked.get(bf.receiverList.pid);
+			}
+ 		}
+ 	} else {
+ 		app = r.curApp;
+ 	}
+ 	if (app != null) {
+ 		anrMessage = "Broadcast of " + r.intent.toString();
+ 	}
+ 	if (mPendingBroadcast == r) {
+ 		mPendingBroadcast = null;
+ 	}
+ 	// Move on to the next receiver.
+ 	finishReceiverLocked(r, r.resultCode, r.resultData, r.resultExtras, r.resultAbort, false);
+ 	scheduleBroadcastsLocked();
+ 	if (!debugging && anrMessage != null) {
+ 		// Post the ANR to the handler since we do not want to process ANRs while
+ 		// potentially holding our lock.
+ 		mHandler.post(new AppNotResponding(app, anrMessage));
+ 	}
+}
+```
+最终调⽤AppErrors中的appNotResponding,显示ANR对话框
+
+```java
+private final class AppNotResponding implements Runnable {
+	 private final ProcessRecord mApp;
+	 private final String mAnnotation;
+	 public AppNotResponding(ProcessRecord app, String annotation) {
+		 mApp = app;
+		 mAnnotation = annotation;
+	 }
+	 @Override
+	 public void run() {
+	 	mService.mAppErrors.appNotResponding(mApp, null, null, false, mAnnotation);
+	 }
+}
+```
+

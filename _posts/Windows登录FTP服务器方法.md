@@ -1,0 +1,42 @@
+﻿>介绍两种在windows下登录ftp服务器的方法
+#### 1. 使用FileZilla登录FTP服务器
+##### 1.1 下载FileZilla软件并安装
+下载链接：https://www.filezilla.cn/download/client
+可以根据不同的系统选择不同平台的安装包并安装下载
+##### 1.2 使用FileZilla软件添加站点并填写登录信息
+- 打开FileZilla软件，主界面如图所示
+![!\[在这里插入图片描述\](https://img-blog.csdnimg.cn/20200604094358269.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70](https://img-blog.csdnimg.cn/20200604104639541.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+- 点击工具栏的file -> Site Manager
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604094604250.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+点击左下方的New site添加一个新的站点，点击Raname重命名，当有多个FTP站点加以区分。填写右侧的站点登录信息
+- Protocol：选择登录协议，根据站点服务器是FTP或者SFTP进行选择
+- Host：站点服务器的服务器地址
+- Port：端口号，可不填
+- Encryption：加密相关，登陆不上时可以挨个试一试，一般最后一项成功率较高
+- Logon Type：登陆类型，一般有账号密码的选择正常就行
+- User：用户名
+- Password：登陆密码
+- Comment：可以添加一些描述信息
+##### 1.3 添加完登录信息，进行登录
+点击 Connect 登录当前站点，点击OK保存当前站点。有多个保存站点时可以在右侧的Selet entry站点列表选择目标站点进程Connect。登陆成功后界面如下所示：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604104656133.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+左边是本地的文件，右边是服务器文件，可以通过鼠标将服务器文件拖动到本地文件夹进行下载操作（反之则是上传），待下方进度条走完，即可完成下载或上传操作
+
+#### 2. 使用window自带添加FTP网络映射
+右击 此电脑 -> 添加一个网络位置
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604102942355.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+一直点击下一步，直到出现添加站点的页面：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604103100179.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+添加站点时需要注意站点前带协议前缀，比如：ftp://mysite.logon.com，ftp://不可省
+添加完站点后进入添加用户名界面，如下：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604103448812.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+一般加密的都需要账号密码，所以不用勾选匿名登录选择项
+之后下一步就是描述信息，用来标识站点，内容自定义：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604103657553.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+点击完成即结束创建站点工作，此时会在文件管理器主页的网络位置显示刚才创建的站点映射：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604103920275.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+如果未登录过的话，右击选择登录，会弹出登录界面：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604104245159.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+点击登录，填写登录密码之后正常登录之后，即可像正常电脑上的文件夹一样进行访问：
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200604104420604.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+

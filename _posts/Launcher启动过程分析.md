@@ -1,0 +1,316 @@
+﻿@[toc]
+##### 1. 相关的framework核心类
+```java
+/frameworks/base/core/java/com/android/internal/os/ZygoteInit.java
+/frameworks/base/core/java/com/android/internal/os/ZygoteServer.java
+/frameworks/base/core/java/com/android/internal/os/ZygoteConnection.java
+/frameworks/base/core/java/com/android/internal/os/Zygote.java
+/frameworks/base/core/java/com/android/internal/os/RuntimeInit.java
+/frameworks/base/services/java/com/android/server/SystemServer.java
+/frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java
+/frameworks/base/services/core/java/com/android/server/am/ProcessList.java
+/frameworks/base/services/core/java/com/android/server/wm/ActivityTaskManagerService.java
+/frameworks/base/services/core/java/com/android/server/wm/ActivityStartController.java
+/frameworks/base/services/core/java/com/android/server/wm/ActivityStarter.java
+/frameworks/base/services/core/java/com/android/server/wm/ActivityStack.java
+/frameworks/base/services/core/java/com/android/server/wm/ActivityStackSupervisor.java
+/frameworks/base/services/core/java/com/android/server/wm/RootActivityContainer.java
+/frameworks/base/services/core/java/com/android/server/wm/ClientLifecycleManager.java
+/frameworks/base/core/java/android/os/Process.java
+/frameworks/base/core/java/android/os/ZygoteProcess.java
+/frameworks/base/core/java/android/app/ActivityThread.java
+/frameworks/base/core/java/android/app/Activity.java
+/frameworks/base/core/java/android/app/ActivityManagerInternal.java
+/frameworks/base/core/java/android/app/servertransaction/ClientTransaction.java
+/frameworks/base/core/java/android/app/servertransaction/ClientTransaction.aidl
+/frameworks/base/core/java/android/app/ClientTransactionHandler.java
+/frameworks/base/core/java/android/app/servertransaction/TransactionExecutor.java
+/frameworks/base/core/java/android/app/servertransaction/LaunchActivityItem.java
+/frameworks/base/core/java/android/app/Instrumentation.java
+/frameworks/base/services/core/java/com/android/server/pm/PackageManagerService.java
+```
+##### 2. 主要类及其作用
+```java
+Instrumentation：
+负责调用Activity和Application生命周期。
+
+ActivityTaskManagerService：
+负责Activity管理和调度等工作。ATM是Android10中新增内容
+
+ActivityManagerService：
+负责管理四大组件和进程，包括生命周期和状态切换。
+
+ActivityTaskManagerInternal：
+是由ActivityTaskManagerService对外提供的一个抽象类，真正的实现是在ActivityTaskManagerService#LocalService
+
+ActivityThread：
+管理应用程序进程中主线程的执行
+
+ActivityStackSupervisor：
+负责所有Activity栈的管理
+
+TransactionExecutor：
+主要作用是执行ClientTransaction
+
+ClientLifecycleManager：
+生命周期的管理调用
+```
+##### 3. Launcher启动时序图
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200506162220939.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+##### 4. SystemServer -> HomeActivity调用堆栈
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200506163532240.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+
+##### 5. Launcher启动过程源码追踪
+做Android开发的同学可能都了解，在android系统起来之后，会调AMS里面的systemReady()方法，而在该方法中会启动Android的系统的第一个app——Launcher：
+```java
+public void systemReady(final Runnable goingCallback, TimingsTraceLog traceLog) {
+...
+    mAtmInternal.startHomeOnAllDisplays(currentUserId, "systemReady");
+...
+}
+```
+虽然本文的主题是Launcher启动app过程分析，但在继续主题内容之前，我们先来了解一下Launcher的启动过程，接上面的步骤，我们看一下startHomeOnAllDisplays这个方法：
+
+```java
+//中间层层调用过程我们不追究了，看最终的方法实现位置
+boolean startHomeOnDisplay(int userId, String reason, int displayId, boolean allowInstrumenting,
+            boolean fromHomeKey) {
+    // Fallback to top focused display if the displayId is invalid.
+    if (displayId == INVALID_DISPLAY) {
+        displayId = getTopDisplayFocusedStack().mDisplayId;
+    }
+    //这里首先会构造一个Intent，使用此Intent得到对应的ActivityInfo对象
+    Intent homeIntent = null;
+    ActivityInfo aInfo = null;
+    if (displayId == DEFAULT_DISPLAY) {
+        homeIntent = mService.getHomeIntent();
+        aInfo = resolveHomeActivity(userId, homeIntent);
+    } else if (shouldPlaceSecondaryHomeOnDisplay(displayId)) {
+        Pair<ActivityInfo, Intent> info = resolveSecondaryHomeActivity(userId, displayId);
+        aInfo = info.first;
+        homeIntent = info.second;
+    }
+    if (aInfo == null || homeIntent == null) {
+        return false;
+    }
+
+    if (!canStartHomeOnDisplay(aInfo, displayId, allowInstrumenting)) {
+        return false;
+    }
+
+    // Updates the home component of the intent.
+    //从上面的ActivityInfo对象获取packagename和main activity，并构建ComponentName，设进Intent
+    homeIntent.setComponent(new ComponentName(aInfo.applicationInfo.packageName, aInfo.name));
+    homeIntent.setFlags(homeIntent.getFlags() | FLAG_ACTIVITY_NEW_TASK);
+    // Updates the extra information of the intent.
+    if (fromHomeKey) {
+        homeIntent.putExtra(WindowManagerPolicy.EXTRA_FROM_HOME_KEY, true);
+    }
+    // Update the reason for ANR debugging to verify if the user activity is the one that
+    // actually launched.
+    final String myReason = reason + ":" + userId + ":" + UserHandle.getUserId(
+            aInfo.applicationInfo.uid) + ":" + displayId;
+    //构建完Intent后，将由此启动Launcher
+    mService.getActivityStartController().startHomeActivity(homeIntent, aInfo, myReason,
+            displayId);
+    return true;
+}
+
+// 重点关注一下里面的getHomeIntent
+Intent getHomeIntent() {
+    //一般情况首次走到这里时，mTopAction，mTopData，mTopComponent都为null
+    Intent intent = new Intent(mTopAction, mTopData != null ? Uri.parse(mTopData) : null);
+    intent.setComponent(mTopComponent);
+    intent.addFlags(Intent.FLAG_DEBUG_TRIAGED_MISSING);
+    if (mFactoryTest != FactoryTest.FACTORY_TEST_LOW_LEVEL) {
+        //这个地方是关键，category指定为CATEGORY_HOME
+        intent.addCategory(Intent.CATEGORY_HOME);
+    }
+    return intent;
+}
+```
+resolveHomeActivity通过Binder跨进程通知PackageManagerService从系统所用已安装的引用中，找到一个符合HomeItent的Activity：
+
+```java
+ActivityInfo resolveHomeActivity(int userId, Intent homeIntent) {
+    final int flags = ActivityManagerService.STOCK_PM_FLAGS;
+    final ComponentName comp = homeIntent.getComponent(); //系统正常启动时，component为null
+    ActivityInfo aInfo = null;
+    ...
+        if (comp != null) {
+            // Factory test.
+            aInfo = AppGlobals.getPackageManager().getActivityInfo(comp, flags, userId);
+        } else {
+            //系统正常启动时，走该流程
+            final String resolvedType =
+                    homeIntent.resolveTypeIfNeeded(mService.mContext.getContentResolver());
+            
+            //resolveIntent做了两件事：1.通过queryIntentActivities来查找符合HomeIntent需求Activities
+            //            2.通过chooseBestActivity找到最符合Intent需求的Activity信息
+            final ResolveInfo info = AppGlobals.getPackageManager()
+                    .resolveIntent(homeIntent, resolvedType, flags, userId);
+            if (info != null) {
+                aInfo = info.activityInfo;
+            }
+        }
+    ...
+    aInfo = new ActivityInfo(aInfo);
+    aInfo.applicationInfo = mService.getAppInfoForUser(aInfo.applicationInfo, userId);
+    return aInfo;
+}
+```
+正在的启动Home Activity入口。obtainStarter() 方法返回的是 ActivityStarter 对象，它负责 Activity 的启动，一系列 setXXX() 方法传入启动所需的各种参数，最后的 execute() 是真正的启动逻辑。另外如果home activity处于顶层的resume activity中，则Home Activity 将被初始化，但不会被恢复。并将保持这种状态，直到有东西再次触发它。我们需要进行另一次恢复：
+
+```java
+void startHomeActivity(Intent intent, ActivityInfo aInfo, String reason, int displayId) {
+    ....
+    //返回一个 ActivityStarter 对象，它负责 Activity 的启动
+    //一系列 setXXX() 方法传入启动所需的各种参数，最后的 execute() 是真正的启动逻辑
+    //最后执行 ActivityStarter的execute方法
+    mLastHomeActivityStartResult = obtainStarter(intent, "startHomeActivity: " + reason)
+            .setOutActivity(tmpOutRecord)
+            .setCallingUid(0)
+            .setActivityInfo(aInfo)
+            .setActivityOptions(options.toBundle())
+            .execute();
+    mLastHomeActivityStartRecord = tmpOutRecord[0];
+    final ActivityDisplay display =
+            mService.mRootActivityContainer.getActivityDisplay(displayId);
+    final ActivityStack homeStack = display != null ? display.getHomeStack() : null;
+ 
+    if (homeStack != null && homeStack.mInResumeTopActivity) {
+        //如果home activity 处于顶层的resume activity中，则Home Activity 将被初始化，但不会被恢复（以避免递归恢复），
+        //并将保持这种状态，直到有东西再次触发它。我们需要进行另一次恢复。
+        mSupervisor.scheduleResumeTopActivities();
+    }
+}
+```
+obtainStarter没有调用setMayWait的方法，因此mRequest.mayWait为false，走startActivity流程：
+
+```java
+int execute() {
+    ...
+    if (mRequest.mayWait) {
+        return startActivityMayWait(...)
+    } else {
+         return startActivity(...) 
+    }
+    ...
+}
+```
+延时布局，然后通过startActivityUnchecked()来处理启动标记 flag ，要启动的任务栈等，最后恢复布局：
+
+```java
+private int startActivity(final ActivityRecord r, ActivityRecord sourceRecord,
+            IVoiceInteractionSession voiceSession, IVoiceInteractor voiceInteractor,
+            int startFlags, boolean doResume, ActivityOptions options, TaskRecord inTask,
+            ActivityRecord[] outActivity, boolean restrictedBgActivity) {
+    ...
+    try {
+        //延时布局
+        mService.mWindowManager.deferSurfaceLayout();
+        //调用 startActivityUnchecked ,一路调用到resumeFocusedStacksTopActivities()
+        result = startActivityUnchecked(r, sourceRecord, voiceSession, voiceInteractor,
+                startFlags, doResume, options, inTask, outActivity, restrictedBgActivity);
+    } finally {
+        //恢复布局
+        mService.mWindowManager.continueSurfaceLayout();
+    }
+    ...
+}
+```
+获取屏幕栈顶的Activity，恢复它：
+
+```java
+boolean resumeFocusedStacksTopActivities(
+        ActivityStack targetStack, ActivityRecord target, ActivityOptions targetOptions) {
+    ...
+    //如果秒表栈就是栈顶Activity，启动resumeTopActivityUncheckedLocked()
+    if (targetStack != null && (targetStack.isTopStackOnDisplay()
+        || getTopDisplayFocusedStack() == targetStack)) {
+    result = targetStack.resumeTopActivityUncheckedLocked(target, targetOptions);
+    ...
+    if (!resumedOnDisplay) {
+        // 获取  栈顶的 ActivityRecord
+        final ActivityStack focusedStack = display.getFocusedStack();
+        if (focusedStack != null) {
+            //最终调用startSpecificActivityLocked()
+            focusedStack.resumeTopActivityUncheckedLocked(target, targetOptions);
+        }
+    }
+  }
+}
+```
+发布消息以启动进程，以避免在ATM锁保持的情况下调用AMS时可能出现死锁,最终调用到ATM的startProcess()：
+
+```java
+void startSpecificActivityLocked(ActivityRecord r, boolean andResume, boolean checkConfig) {
+    ...
+    //发布消息以启动进程，以避免在ATM锁保持的情况下调用AMS时可能出现死锁
+    //最终调用到AMS的startProcess()
+    final Message msg = PooledLambda.obtainMessage(
+            ActivityManagerInternal::startProcess, mService.mAmInternal, r.processName,
+            r.info.applicationInfo, knownToBeDead, "activity", r.intent.getComponent());
+    mService.mH.sendMessage(msg);
+    ...
+}
+```
+一路调用Process start()，最终到ZygoteProcess的attemptUsapSendArgsAndGetResult()，用来fork一个新的Launcher的进程：
+
+```java
+public void startProcess(String processName, ApplicationInfo info,
+        boolean knownToBeDead, String hostingType, ComponentName hostingName) {
+        ..
+        //同步操作，避免死锁
+        synchronized (ActivityManagerService.this) {
+            //调用startProcessLocked,然后到 Process的start，最终到ZygoteProcess的attemptUsapSendArgsAndGetResult()
+            //用来fork一个新的Launcher的进程
+            startProcessLocked(processName, info, knownToBeDead, 0 /* intentFlags */,
+                    new HostingRecord(hostingType, hostingName),
+                    false /* allowWhileBooting */, false /* isolated */,
+                    true /* keepIfLarge */);
+        }
+        ...
+}
+```
+##### 6. AMS -> Zygote调用堆栈
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200506161659119.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+通过Socket连接Zygote进程，把之前组装的msg发给Zygote，其中processClass ="android.app.ActivityThread"，通过Zygote进程来Fork出一个新的进程，并执行 "android.app.ActivityThread"的main方法
+
+```java
+private Process.ProcessStartResult attemptZygoteSendArgsAndGetResult(
+        ZygoteState zygoteState, String msgStr) throws ZygoteStartFailedEx {
+    try {
+        //传入的zygoteState为openZygoteSocketIfNeeded()，里面会通过abi来检查是第一个zygote还是第二个
+        final BufferedWriter zygoteWriter = zygoteState.mZygoteOutputWriter;
+        final DataInputStream zygoteInputStream = zygoteState.mZygoteInputStream;
+ 
+        zygoteWriter.write(msgStr);  //把应用进程的一些参数写给前面连接的zygote进程，包括前面的processClass ="android.app.ActivityThread"
+        zygoteWriter.flush(); //进入Zygote进程，处于阻塞状态
+ 
+         //从socket中得到zygote创建的应用pid，赋值给 ProcessStartResult的对象
+        Process.ProcessStartResult result = new Process.ProcessStartResult();
+        result.pid = zygoteInputStream.readInt();
+        result.usingWrapper = zygoteInputStream.readBoolean();
+ 
+        if (result.pid < 0) {
+            throw new ZygoteStartFailedEx("fork() failed");
+        }
+ 
+        return result;
+    } catch (IOException ex) {
+        zygoteState.close();
+        Log.e(LOG_TAG, "IO Exception while communicating with Zygote - "
+                + ex.toString());
+        throw new ZygoteStartFailedEx(ex);
+    }
+}
+```
+##### 7. 小结
+Launcher的启动由三部分启动：
+- SystemServer完成启动Launcher Activity的调用
+- Zygote()进行Launcher进程的Fork操作
+- 进入ActivityThread的main()，完成最终Launcher的onCreate操作
+
+通过上面的过程，我们已经大致了解了从systemReady到AMS请求fork Launcher进程的整个流程，至于AMS请求之后，linux的fork过程是怎样，本篇并未做继续跟进，后续章节会继续对fork过程做一个详尽的跟踪。当然，Launcher虽然是系统第一个启动的app，但大同小异，其他任何应用进程的启动和Launcher也不尽相同，所以了解完Launcher的启动流程，我们对整个Android进程的启动和创建过程都会有一个清晰的认识
+

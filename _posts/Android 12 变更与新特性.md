@@ -1,0 +1,883 @@
+﻿>Date：2021.7
+
+@[toc]
+### Android 12新特性总结 
+
+Android 12 带来了 Android 历史上最大的设计变更。我们重新思考了整套体验，包括颜色、形状、光照和动效，使得 Android 12 更具表现力，更鲜活，更个性化。这项工作是在我们的软件、硬件以及 Material Design 团队的深入合作下完成的。我们正在将软件和硬件的生态系统统一在同一种设计语言下，名为 Material You。
+
+- Android 12 Beta: 为您设计
+
+  https://blog.google/products/android/android-12-beta
+
+- Material You
+
+  https://material.io/blog/announcing-material-you
+![\[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-AuQcY086-1627264630281)(C:\Users\tcl\AppData\Roaming\Typora\typora-user-images\image-20210708101250250.png)\]](https://img-blog.csdnimg.cn/82066a29fc06447d8e3cec892ae9eea0.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+#### 一、设置
+
+在 Android 12 上个人账户的头像和搜索栏进行了分离，整个搜索栏展示的也更加圆润，下拉Settings List时搜索栏会悬浮在屏幕上方
+![\[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-Q5m7O3Jr-1627034536269)(C:\Users\tcl\AppData\Roaming\Typora\typora-user-images\image-20210708151224176.png)\]](https://img-blog.csdnimg.cn/6cedccb20a88499a8eda1f4de7a4b838.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+#### 二、通知
+
+##### 1. 媒体控制界面
+
+   媒体控制的界面更大了，也更容易，你可以通过点击一些弹出框调整 App 里面的设置，比如声音的大小  ![在这里插入图片描述](https://img-blog.csdnimg.cn/bb7ddd3b6f1b4382b340d27b48886a38.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+##### 2. 媒体控制
+
+   关于媒体控制，你可以不选中 App，这样，他们将不会在通知栏上以媒体控制栏展示
+
+![img](https://img-blog.csdnimg.cn/img_convert/25294d06d3708aa3267a587a04760551.png)
+
+##### 3. 休眠功能
+
+   Android 12 增加了新的休眠功能，点击图中的按钮就会休眠应用，使得它们将会在接下来的一段时间内不会在通知栏上出现
+![在这里插入图片描述](https://img-blog.csdnimg.cn/ba355647b419414bbe02e85cd77c952c.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+##### 4. 通知界面更新
+
+   我们对通知设计进行改版，使其更现代、更易用、更实用。在首个预览版中，您可以发现从抽屉式导航栏和控件到模板本身都有所变化。我们还优化了整个系统的转场和动画，使其更加流畅。作为更新的一部分，对于针对 Android 12 的应用，我们会使用自定义内容、图标以及展开提示来对通知进行美化，从而使其观感与其他通知一致。请访问官方文档了解详细信息。
+
+   - 官方文档: 自定义通知变更
+
+     http://developer.android.google.cn/about/versions/12/behavior-changes-12#custom-notifications
+
+     
+
+     Android 12 改变了完全[自定义通知](https://developer.android.google.cn/training/notify-user/custom-notification)的外观。 以前，自定义通知能够使用整个通知区域并提供自己的布局和样式。由此产生的反模式可能会令用户困惑，或在不同设备上引发布局兼容性问题。
+
+     对于以 Android 12 为目标平台的应用，包含自定义内容视图的通知将不再使用完整通知区域；相反，系统会应用标准模板。此模板可确保自定义通知在所有状态下都与其他通知相同，例如，在收起状态下的通知图标和展开功能，以及在展开状态下的通知图标、应用名称和收起功能。此行为与 [`Notification.DecoratedCustomViewStyle`](https://developer.android.google.cn/reference/android/app/Notification.De coratedCustomViewStyle) 的行为几乎完全相同。
+
+     通过这种方式，Android 12 通过为用户提供可看到且熟悉的通知展开功能，使所有通知保持外观一致且易于浏览。
+
+     下图显示了标准模板中的自定义通知：
+
+     ![img](https://img-blog.csdnimg.cn/img_convert/89a4266853200fa5c45bb2a800d9af1c.png)以下示例展示了在收起状态和展开状态下呈现的自定义通知：
+
+     ![img](https://img-blog.csdnimg.cn/img_convert/3b9ec3c9b59f4e77f870739f848822e2.png)
+
+     Android 12 中的变更会影响某些定义 [`Notification.Style`](https://developer.android.google.cn/reference/android/app/Notification.Style) 的自定义子类的应用，或使用 [`Notification.Builder`](https://developer.android.google.cn/reference/android/app/Notification.Builder) 的方法 [`setCustomContentView(RemoteViews)`](https://developer.android.google.cn/reference/android/app/Notification.Builder#setCustomContentView(android.widget.RemoteViews))、[`setCustomBigContentView(RemoteViews)`](https://developer.android.google.cn/reference/android/app/Notification.Builder#setCustomBigContentView(android.widget.RemoteViews)) 和 [`setCustomHeadsUpContentView(RemoteViews)`](https://developer.android.google.cn/reference/android/app/Notification.Builder#setCustomHeadsUpContentView(android.widget.RemoteViews)) 的应用。
+
+     如果您的应用使用的是完全自定义的通知，我们建议您尽快使用新模板进行测试，并进行必要的调整：
+
+     1. 启用自定义通知变更：
+
+        a. 将应用的 `targetSdkVersion` 变更为 `S` 以启用新行为。
+
+        b. 重新编译。
+
+        c. 在搭载 Android 12 的设备或模拟器上安装您的应用。
+
+     2. 测试所有使用自定义视图的通知，确保这些通知在通知栏中看起来符合预期。
+
+     3. 请注意自定义视图规格。一般来说，提供给自定义通知的高度比之前小。在收起状态下，自定义内容的最大高度已从 106dp 减少到 48dp。此外，水平空间也减小了。
+
+     4. 为了确保“浮动通知”状态看起来符合您的预期，请勿忘记将通知渠道的重要性提升至“高”（在屏幕中弹出）
+
+##### 5. trampoline
+
+   Android 12 无法通过服务或广播接收器创建通知 trampoline.
+
+   当用户与[通知](https://developer.android.google.cn/guide/topics/ui/notifiers/notifications)互动时，某些应用会启动[应用组件](https://developer.android.google.cn/guide/components/fundamentals#Components)来响应通知点按操作，此应用组件最终会启动用户最终看到并与之互动的 activity。此应用组件被称为通知 trampoline。
+
+   为了改进应用性能和用户体验，以 Android 12 为目标平台的应用无法从用作通知 trampoline 的[服务](https://developer.android.google.cn/guide/components/services)或[广播接收器](https://developer.android.google.cn/guide/components/broadcasts)中启动 activity。换言之，当用户点按通知或通知中的[操作按钮](https://developer.android.google.cn/training/notify-user/build-notification#Actions)时，您的应用无法在服务或广播接收器内调用 [`startActivity()`](https://developer.android.google.cn/reference/android/content/Context#startActivity(android.content.Intent))。
+
+   当您的应用尝试从充当通知 trampoline 的服务或广播接收器启动 activity 时，系统会阻止启动该 activity 启动，并在 [Logcat](https://developer.android.google.cn/studio/command-line/logcat) 中显示以下消息：
+
+   ```java
+   Indirect notification activity start (trampoline) from PACKAGE_NAME, \
+   this should be avoided for performance reasons.
+   ```
+
+   如果您的应用从充当通知 trampoline 的服务或广播接收器启动 activity，请完成以下迁移步骤：
+
+   - 创建与一个下列 activity 关联的 [`PendingIntent`](https://developer.android.google.cn/reference/android/app/PendingIntent) 对象：
+     a. 用户点按通知后会看到的 activity（首选）。
+     b. Trampoline activity 或用于启动用户在点按通知后可以看到的 activity 的 activity。
+
+   - 在[构建通知](https://developer.android.google.cn/reference/android/app/Notification.Builder#setContentIntent(android.app.PendingIntent))的过程中，请使用您在上一步中创建的 `PendingIntent` 对象。
+
+     https://developer.android.google.cn/about/versions/12/behavior-changes-12#notification-trampolines
+
+#### 三、消息框Toast
+
+可以看到消息框究竟来自哪个应用，限制消息框的内容长度，限定每个应用在给定时间发出的消息框的数量
+![在这里插入图片描述](https://img-blog.csdnimg.cn/79c0ac838d7448e7ad4fe1044cf09b27.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+#### 四、模糊处理
+
+在 Android 12 中，您可以更轻松地将常用图形效果应用于视图和渲染结构上。您可以使用 RenderEffect 将模糊、色彩滤镜等特效应用于任何 RenderNode。您可以将这些特效组合为连锁特效 (即组成内部和外部特效)，也可以混用这些特效。您还可以通过调用 View.setRenderEffect(RenderEffect) 将特效直接应用于视图 (View，因为其基于 RenderNode)。
+
+```java
+view.setRenderEffect(RenderEffect.createBlurEffect(radiusX, radiusY, SHADER_TILE_MODE))
+```
+
+- RenderEffect
+
+  https://developer.android.google.cn/reference/android/graphics/RenderEffect
+
+- RenderNode
+
+  https://developer.android.google.cn/reference/android/graphics/RenderNode
+
+- View.setRenderEffect(RenderEffect)
+
+  https://developer.android.google.cn/reference/android/view/View#setRenderEffect(android.graphics.RenderEffect)
+
+有了这个功能，您在模糊 ImageView 时，就不必进行获取位图数据、处理图像、创建新Bitmap，再将其设置回 ImageView 这些操作了。RenderEffect 利用了现有的渲染流水线，最大限度地减少了额外的计算量。
+
+- ImageView
+
+  https://developer.android.google.cn/reference/android/widget/ImageView
+
+- Bitmap
+
+  https://developer.android.google.cn/reference/android/graphics/Bitmap
+
+您还可以使用新的 Window.setBackgroundBlurRadius() API 为窗口背景创建雾面玻璃效果。这个 API 可以设置模糊半径，以调整雾面密度和范围，平台只会对您的应用窗口边框内的背景内容应用模糊效果。您还可以使用 blurBehindRadius 来模糊窗口后面的所有内容，从而为浮动窗口营造出深度效果。
+![在这里插入图片描述](https://img-blog.csdnimg.cn/581f7f1f0dbc490fa22f4c4ba52ce74d.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+
+- Window.setBackgroundBlurRadius()
+
+  https://developer.android.google.cn/reference/android/view/Window#setBackgroundBlurRadius(int)
+
+- blurBehindRadius
+
+  https://developer.android.google.cn/reference/android/view/WindowManager.LayoutParams#blurBehindRadius
+
+#### 五、应用启动体验改进
+
+Android 12 中应用启动的体验更加一致，更令人愉悦。我们为所有应用添加了新的应用启动动画，在启动时屏幕会显示应用图标，并过渡到应用本身。新的体验为每个应用的启动带来了标准化的设计元素，但我们也允许进行定制，以便应用保持自己独特的品牌特色。例如，您可以使用新的 SplashScreen (启动屏幕) API 和资源来管理启动屏幕的背景颜色，用自定义图标或动画来替换静态的启动图标，控制呈现应用的时机，指定这套体验是使用浅色模式或是深色模式，还可以管理退出动画。
+
+- SplashScreen (启动屏幕)
+
+  https://developer.android.google.cn/reference/android/window/SplashScreen
+
+- 启动屏幕背景颜色
+
+  https://developer.android.google.cn/reference/android/R.attr#windowSplashScreenBackground
+
+- 使用自定义图标
+
+  https://developer.android.google.cn/reference/android/R.attr#windowSplashScreenBrandingImage
+
+- 使用动画图标
+
+  https://developer.android.google.cn/reference/android/R.attr#windowSplashScreenAnimatedIcon
+
+- 管理退出动画
+
+  https://developer.android.google.cn/reference/android/window/SplashScreen.OnExitAnimationListener
+
+```xml
+<item name="android:windowSplashScreenBackground">@color/newSplashScreenColor</item>
+```
+
+```kotlin
+private fun customizeSplashScreenExit() {
+    splashScreen.setOnExitAnimationListener { splashScreenView ->
+        sleep(1000)
+        splashScreenView.remove()
+    }
+}
+```
+
+所有应用都已默认启用了这个新特性，您无需做任何事情即可获益。我们建议您在应用中尽快测试这个新特性，尤其是已经在使用启动屏幕的应用。欢迎大家查看新的 API 并开始定制应用启动体验，并和我们分享使用反馈。请访问官方文档了解详细信息: 
+
+https://developer.android.google.cn/about/versions/12/features/splash-screen
+
+关于这部分实践，可以参考知乎上的一篇文章：https://zhuanlan.zhihu.com/p/377307416
+
+#### 六、滚动拉伸效果
+
+增加了一个新的系统级别的过度滚动 "拉伸" 效果，让用户知道他们已经滚动到了用户界面中内容的末端。拉伸效果提供了自然的垂直和水平滚动停止指示，通用于所有应用，且在整个平台和 AndroidX 的滚动容器中默认启用。新的过度滚动拉伸效果取代了以前版本中的发光效果。请务必在您的应用和内容中测试新的滚动行为，您也可以选择不启用此功能。请访问官方文档了解详细信息:
+
+https://developer.android.google.cn/about/versions/12/overscroll
+
+#### 七、AVIF图像支持
+
+Android 12 引入了对 AV1 图像文件格式 (AVIF) 的平台支持，提供更高的图像质量和更高效的压缩。AVIF 是一种使用 AV1 编码的图像和图像序列的容器格式。与其他现代图像格式一样，AVIF 利用了视频压缩的帧内编码内容。相较于旧的图像格式 (如 JPEG)，在相同的文件大小下，AVIF 可以极大地提高图像质量
+![\[外链图片转存失败,源站可能有防盗链机制,建议将图片保存下来直接上传(img-7zj3C50O-1627034536275)(C:\Users\tcl\Pictures\avif.png)\]](https://img-blog.csdnimg.cn/262ca07661204ba5a6cf3c622a850a6b.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+![在这里插入图片描述](https://img-blog.csdnimg.cn/b40aa1b6bf314d049eced8b63f281002.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+上图: AVIF (18.2kB)；下图: JPEG (20.7kB)
+
+- AV1 图像文件格式
+
+  https://en.wikipedia.org/wiki/AV1#AV1_Image_File_Format_(AVIF)
+
+- AV1
+
+  https://en.wikipedia.org/wiki/AV1
+
+- AVIF 已经到来
+
+  https://jakearchibald.com/2020/avif-has-landed/
+
+- 图像对比
+
+  https://jakearchibald.com/2020/avif-has-landed/demos/compare/?show=f1&img=/c/f1-match-ff75e344.jpg
+
+#### 八、媒体
+
+##### 1. 音频过渡
+
+改进了处理音频焦点的方式。当一个应用失去音频焦点时，它的音频会自动淡出，从而在播放音频的应用之间提供一个更平滑的过渡，并防止它们的声音互相重叠。这在可折叠和多屏幕的 Android 环境中尤为重要。请访问官方文档了解详细信息:
+
+https://developer.android.google.cn/about/versions/12/features/audio-focus-improvements
+
+##### 2. 音频耦合触感效果
+
+在 Android 12 中，应用可以通过手机的振动单元提供音频耦合触感反馈。振动强度和频率来自于音频会话，让您可以创建更沉浸的游戏和音频体验。例如，视频通话应用可以使用自定义铃声，通过触感反馈识别来电者，您还可以在赛车游戏中模拟崎岖地貌。请访问官方文档了解详细信息。
+
+- 官方文档: HapticGenerator
+
+  https://developer.android.google.cn/reference/android/media/audiofx/HapticGenerator
+
+##### 3. 多声道音频
+
+Android 12 为包含空间信息的音频带来了多项增强。添加了对 MPEG-H 透传 (passthrough) 和分载 (offload) 模式的播放支持，音频混音器、重采样器和效果经过优化，支持多达 24 个通道 (过去最大仅支持 8 个)
+
+##### 4. 视频编码改进
+
+Android 12 对控制视频编码量化参数 (Quantization Parameter, QP) 范围的键集进行了标准化，使开发者能够规避厂商专用代码。新的键已经加入 MediaFormat API 和 NDK Media 库。此外，视频编码方需要设置最低视频质量阈值，以确保当视频比较复杂时用户不会看到极低质量的画面。
+
+- MediaFormat API
+
+  https://developer.android.google.cn/reference/android/media/MediaFormat.html#KEY_VIDEO_QP_B_MAX
+
+- NDK Media 库
+
+  https://developer.android.google.cn/ndk/reference/group/media
+
+#### 九、隐私和安全
+
+##### 1. 麦克风和摄像头
+
+   - 指示器
+
+   我们在状态栏加入了指示器，帮助用户知晓应用正在使用设备的摄像头和麦克风。用户可以前往快速设置 (Quick Settings) 查看正在使用摄像头和麦克风的应用，并在需要时轻松管理其使用权限。我们建议开发者查看自己应用对麦克风和摄像头的使用情况，移除用户不希望使用这些传感器的用例。请访问官方文档了解详细信息:
+
+   https://developer.android.com/about/versions/12/behavior-changes-all#mic-camera-indicators
+
+![在这里插入图片描述](https://img-blog.csdnimg.cn/1c748ebaebb34d87b010c64d5e5d6d1b.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+![在这里插入图片描述](https://img-blog.csdnimg.cn/80a3accfcd5745cc842328aece6ca60d.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+   - 开关
+
+     我们在快速设置 (Quick Settings) 里增加了全局开关，让用户可以快速禁用应用访问麦克风和摄像头 (仅限支持的设备)。当开关被关闭时，访问相应传感器的应用会收到空白的视频和音频流，系统也会提示用户打开传感器以使用应用的功能。开发者可以使用新的 SensorPrivacyManager API 来了解设备对这个开关功能的支持情况。麦克风和摄像头开关控制对所有的应用均生效，无论其目标平台版本如何。请访问官方文档了解详细信息:
+
+     https://developer.android.com/about/versions/12/behavior-changes-all#mic-camera-toggles
+
+     ```java
+     public boolean supportsSensorToggle (int sensor);
+     //SensorPrivacyManager.Sensors.MICROPHONE, SensorPrivacyManager.Sensors.CAMERA
+     ```
+ 
+
+
+     - SensorPrivacyManager
+     
+       https://developer.android.google.cn/reference/android/hardware/SensorPrivacyManager.html
+![在这里插入图片描述](https://img-blog.csdnimg.cn/321fd4bf6593453ba61de2f55411a526.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+##### 2. 附近设备权限
+
+   以前，蓝牙扫描要求应用拥有位置权限，这对那些需要与附近设备配对但实际上不需要设备位置的应用是一个挑战。应用现在可以扫描附近的设备，而不需要位置许可。把 Target SDK 等级升级到 Android 12 的应用可以使用新的 BLUETOOTH_SCAN 权限并设置 usesPermissionFlags="neverForLocation" 属性进行扫描。在与设备配对后，您可以使用 BLUETOOTH_CONNECT 权限与之互动。这些权限旨在促进隐私友好的应用设计，同时降低应用使用的门槛。请访问官方文档了解详细信息:
+
+   https://developer.android.google.cn/about/versions/12/features/bluetooth-permissions
+
+   - BLUETOOTH_SCAN
+
+     https://developer.android.google.cn/reference/android/Manifest.permission.html#BLUETOOTH_SCAN
+
+   - usesPermissionFlags="neverForLocation"
+
+     https://developer.android.google.cn/reference/android/R.attr.html#usesPermissionFlags
+
+   - BLUETOOTH_CONNECT
+
+     https://developer.android.google.cn/reference/android/Manifest.permission.html#BLUETOOTH_CONNECT
+
+Android 12 引入了 [`BLUETOOTH_SCAN`](https://developer.android.google.cn/reference/android/Manifest.permission#BLUETOOTH_SCAN)、[`BLUETOOTH_ADVERTISE`](https://developer.android.google.cn/reference/android/Manifest.permission#BLUETOOTH_ADVERTISE) 和 [`BLUETOOTH_CONNECT`](https://developer.android.google.cn/reference/android/Manifest.permission#BLUETOOTH_CONNECT) 权限，可让您的应用扫描附近的设备，而无需请求位置权限。您的应用必须以 Android 12 为目标平台，才能声明这些权限.
+
+如果您的应用[与蓝牙设备互动](https://developer.android.google.cn/guide/topics/connectivity/bluetooth)，强烈建议您执行以下操作：
+
+1. 如果您的应用[查找蓝牙设备](https://developer.android.google.cn/guide/topics/connectivity/bluetooth#FindDevices)（如蓝牙低功耗 (BLE) 外围设备），请向应用的清单中添加 `BLUETOOTH_SCAN` 权限。
+2. 如果您的应用[使当前设备可被其他蓝牙设备检测到](https://developer.android.google.cn/guide/topics/connectivity/bluetooth/find-bluetooth-devices#enable-discoverability)，请向应用的清单中添加 `BLUETOOTH_ADVERTISE` 权限。
+3. 如果您的应用[与已配对的蓝牙设备通信](https://developer.android.google.cn/guide/topics/connectivity/bluetooth#ManageAConnection)，请向应用的清单中添加 `BLUETOOTH_CONNECT` 权限。
+4. 对于旧版蓝牙相关的权限声明，请将 `android:maxSdkVersion` 设为 `30`。此应用兼容性步骤有助于系统仅向您的应用授予在搭载 Android 12 的设备上安装时所需的蓝牙权限
+
+```xml
+<manifest>
+    <!-- Request legacy Bluetooth permissions on older devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+                     android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+                     android:maxSdkVersion="30" />
+
+    <!-- Needed only if your app looks for Bluetooth devices.
+         You must add an attribute to this permission, or declare the
+         ACCESS_FINE_LOCATION permission, depending on the results when you
+         check location usage in your app. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <!-- Needed only if your app makes the device discoverable to Bluetooth
+         devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+
+    <!-- Needed only if your app communicates with already-paired Bluetooth
+         devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    ...
+</manifest>
+```
+
+`BLUETOOTH_SCAN`、`BLUETOOTH_ADVERTISE` 和 `BLUETOOTH_CONNECT` 权限是[运行时权限](https://developer.android.google.cn/guide/topics/permissions/overview#runtime)。因此，您必须先在应用中明确[请求用户批准](https://developer.android.google.cn/training/permissions/requesting)
+
+如果您的应用不推导物理位置，那么您可以坚定地断言您的应用绝不会使用蓝牙权限来推导物理位置。为此，请完成以下步骤：
+
+- 将 `android:usesPermissionFlags` 属性添加到 `BLUETOOTH_SCAN` 权限声明，并将此属性的值设为 `neverForLocation`
+- 从应用的清单中移除 `ACCESS_FINE_LOCATION` 权限
+
+```xml
+<manifest>
+    <!-- Request legacy Bluetooth permissions on older devices. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"
+                     android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+                     android:maxSdkVersion="30" />
+
+    <!-- 声明neverForLocation -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+                     android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- 下面这个权限需要移除，若需要推导物理位置，这个权限保留，移除上面的neverForLocation这个usesPermissionFlags -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    ...
+</manifest>
+```
+
+
+
+##### 3. 近似位置
+
+   最近几个版本更新，我们为大家提供了更好的方法来管理对位置的访问，比如为前台和后台的访问提供独立的权限，以及 "仅限这一次" 选项。现在，对于针对 Android 12 的应用，我们通过新的 "近似位置" 选项带来了更多的控制权。当应用请求精确位置数据时，用户现在可以选择授予精确或近似的位置。用户在任何时候都可以通过 "设置" 来修改应用的位置精度。如果您的应用请求的是精确位置数据 (ACCESS_FINE_LOCATION)，请考虑本次带来的变化，以确保您的应用在只获得近似位置时也能正常运行。对于几乎所有常见的位置用例，我们建议只要求获取近似位置 (ACCESS_COARSE_LOCATION)。请访问官方文档了解详细信息:
+
+   https://developer.android.google.cn/about/versions/12/behavior-changes-12#approximate-location
+
+   - 请求位置权限
+
+     https://developer.android.google.cn/training/location/permissions
+
+   - ACCESS_FINE_LOCATION
+
+     https://developer.android.google.cn/reference/android/Manifest.permission#ACCESS_FINE_LOCATION
+
+   - ACCESS_COARSE_LOCATION
+
+     https://developer.android.google.cn/reference/android/Manifest.permission#ACCESS_COARSE_LOCATION
+
+  ![在这里插入图片描述](https://img-blog.csdnimg.cn/1a3023e039f842c28e9835e1fb4de304.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+##### 4. 隐私仪表板 (Privacy Dashboard)
+
+   为了让用户更好地了解应用正在访问的数据，我们加入了隐私仪表板功能。仪表板提供了一个简单而清晰的时间线视图，显示过去 24 小时内所有应用对麦克风、摄像头，以及位置的访问情况。用户还可以向应用查询为什么访问了敏感数据，只需开发者通过一个新的系统 intent ACTION_VIEW_PERMISSION_USAGE_FOR_PERIOD 使用一个 Activity 向用户提供此信息。我们建议应用尽可能利用这个 intent 主动帮助用户了解指定时间段内的数据访问情况。为了帮助您了解自己的代码以及第三方库使用隐私数据的情况，请使用 Data Auditing API。请访问官方文档了解详细信息:
+
+   https://developer.android.com/about/versions/12/features#privacy-dashboard
+
+   - ACTION_VIEW_PERMISSION_USAGE_FOR_PERIOD
+
+     https://developer.android.google.cn/reference/android/content/Intent.html#ACTION_VIEW_PERMISSION_USAGE_FOR_PERIOD
+![在这里插入图片描述](https://img-blog.csdnimg.cn/3b49a390f74f445b9b2ccb5a505984ea.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+![在这里插入图片描述](https://img-blog.csdnimg.cn/131b617b61fe452381fc54f186fa5e74.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+![在这里插入图片描述](https://img-blog.csdnimg.cn/31c2777c35e54e54a6108890c53f50f8.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+
+   
+##### 5. WebView 中的现代 SameSite cookie 行为
+
+WebView 顺应 Chrome 和其他浏览器的变化，加入了新的 SameSite cookie 行为，提供额外的安全性和隐私性，让用户对 cookie 跨站点的使用方式拥有更多的透明度和控制权。旨在改善对第三方 Cookie 的默认处理方式，并帮助防止意外跨站点共享，请访问官方文档了解详细信息。
+
+- SameSite cookie 变更 (2020 年 2 月)
+  
+  https://blog.chromium.org/2020/02/samesite-cookie-changes-in-february.html
+
+- 官方文档: WebView 中的现代 SameSite cookie 行为
+  
+  https://developer.android.google.cn/about/versions/12/behavior-changes-12#samesite
+
+##### 6. 限制使用 Netlink MAC
+我们将继续帮助开发者迁移到保护隐私的可重置标识符。为了在多次版本发布中简化设备级别 Netlink MAC 的迁移，我们在 Android 11 中将这个功能限制在了 API 级别 30。而在 Android 12 中，无论 targetSDK 级别是多少，我们将对所有应用施加这一限制。请访问官方文档了解详细信息。
+
+限制了所有非系统应用对设备的 MAC 地址（不可重置的标识符）的访问：如果应用以 Android 12 为目标平台，则该 API 会返回 null；以 Android 11 或更低版本为目标平台，则该 API 将返回硬编码占位值：`02:00:00:00:00:00`
+
+- 唯一标识符最佳做法
+https://developer.android.google.cn/training/articles/user-data-ids
+- 官方文档: 受限的 Netlink MAC
+https://developer.android.google.cn/about/versions/12/behavior-changes-all#mac-address
+
+
+##### 7. 更安全地导出组件
+
+为了防止应用意外导出 activity、服务和接收器，我们更改了 android:exported 属性的默认处理方式，使其更加明确。借助这项变更，声明一个或多个 intent 过滤器的组件现在必须显式声明一个 android:exported 属性。您应检查清单文件中的组件，避免与此变更相关的安装错误。请访问官方文档了解详细信息。
+
+- android:exported
+
+  https://developer.android.google.cn/guide/topics/manifest/activity-element#exported
+
+- 官方文档: 更安全地导出组件
+
+  https://developer.android.google.cn/about/versions/12/behavior-changes-12#exported
+  
+  ```xml
+  <service android:name="com.example.app.backgroundService"
+           android:exported="false">
+      <intent-filter>
+          <action android:name="com.example.app.START_BACKGROUND" />
+      </intent-filter>
+  </service>
+  ```
+  
+  
+
+
+##### 8. 更安全地处理 Intent
+
+为了使 PendingIntents 的处理更加安全，Android 12 要求应用为每个 PendingIntent 显式声明一个可变性标志，即 FLAG_MUTABLE 或新的 FLAG_IMMUTABLE。如果您的应用试图在不设置任何可变标志的情况下创建 `PendingIntent` 对象，系统会抛出 [`IllegalArgumentException`](https://developer.android.google.cn/reference/java/lang/IllegalArgumentException)，并在 [Logcat](https://developer.android.google.cn/studio/command-line/logcat) 中显示以下消息：
+
+```shell
+PACKAGE_NAME: Targeting S+ (version 10000 and above) requires that one of \
+FLAG_IMMUTABLE or FLAG_MUTABLE be specified when creating a PendingIntent.
+
+Strongly consider using FLAG_IMMUTABLE, only use FLAG_MUTABLE if \
+some functionality depends on the PendingIntent being mutable, e.g. if \
+it needs to be used with inline replies or bubbles.
+```
+
+- FLAG_MUTABLE
+https://developer.android.google.cn/reference/android/app/PendingIntent#FLAG_MUTABLE
+- FLAG_IMMUTABLE
+https://developer.android.google.cn/reference/android/app/PendingIntent#FLAG_IMMUTABLE
+- 官方文档: PendingIntent 需要声明可变性
+https://developer.android.google.cn/about/versions/12/behavior-changes-12#pending-intent-mutability
+
+##### 9.  应用覆盖控制
+
+Android 的系统警告对话框允许一个应用在其他活动应用之上覆盖显示一个图层，以帮助应用提醒用户关注重要操作。不过由于这些窗口会中断用户操作，因此应用需要请求权限才能显示这些内容。在 Android 12 中，您可以控制是否允许在自己的内容上显示这些覆盖图层。在声明新权限后，您的应用可以调用 Window#setHideOverlayWindows()，以表明在您的应用窗口可见时应隐藏所有 TYPE_APPLICATION_OVERLAY 窗口。您可以在交易确认流程等敏感界面中如此操作。请访问官方文档了解详细信息。
+
+- 官方文档: 隐藏应用叠加窗口
+
+  https://developer.android.google.cn/about/versions/12/features#hide-application-overlay-windows
+
+- SYSTEM_ALERT_WINDOW 权限
+
+  https://developer.android.google.cn/reference/android/Manifest.permission#SYSTEM_ALERT_WINDOW
+
+- HIDE_OVERLAY_WINDOWS 权限
+
+  https://developer.android.google.cn/reference/android/Manifest.permission#HIDE_OVERLAY_WINDOWS
+
+- Window#setHideOverlayWindows()
+
+  https://developer.android.google.cn/reference/android/view/Window#setHideOverlayWindows(boolean)
+
+- TYPE_APPLICATION_OVERLAY
+
+  https://developer.android.google.cn/reference/android/view/WindowManager.LayoutParams#TYPE_APPLICATION_OVERLAY
+
+##### 10. 扩展锁屏通知操作的安全性
+
+Android 12 增加了更细粒度的隐私和安全控件来控制设备锁屏时显示的通知。现在，您可以配置通知操作，以便在锁屏触发通知操作时始终生成身份验证质询。此功能是对通知 API 中既有的通知可见性控件的扩充。例如，此功能可以让即时通讯应用在删除消息或将其标记为已读之前请求身份验证。请访问官方文档了解详细信息。
+
+```java
+Notification n1 = new Notification.Builder(context, NotificationListenerVerifierActivity.TAG)
+...
+.addAction(new Notification.Action.Builder(R.drawable.ic_stat_charlie,
+context.getString(R.string.action_test_title), makeBroadcastIntent(context))
+
+// Make sure this notification action will always request authentication when
+// invoked from a lock screen
+.setAuthenticationRequired(true).build())
+
+.build();
+```
+
+
+
+- 官方文档: 安全的锁屏通知操作
+
+  https://developer.android.google.cn/about/versions/12/features#notification-secure
+
+- 配置通知操作
+
+  https://developer.android.google.cn/reference/android/app/Notification.Action.Builder#setAuthenticationRequired(boolean)
+
+- 通知可见性
+
+  https://developer.android.google.cn/reference/android/app/Notification#visibility
+
+##### 11. 访问应用摘要
+
+对于需要确认 Android 设备上所安装的应用软件包完整性的应用，我们引入了新 API，可以让您直接向平台查询一个已安装应用的校验和 (checksum)。您可以从 SHA256、SHA512、Merkle Root 等多种摘要算法中进行选择。在请求校验和时，将应用的软件包名称、需要的校验和类型、信任的安装程序证书以及接收校验和的监听器作为参数来调用 PackageManager.requestChecksums() 即可。平台会根据参数返回安装程序 (例如 Google Play) 预先计算的或平台直接计算得出的校验和。返回结果会根据软件包可见性准则进行过滤，因此您需要在清单中声明自己想查看的软件包。这个新 API 可以让您用更简单有效的方式来获取校验和，不但具有标准公共 API 的稳定性，而且经过优化，速度更快、更安全。为了支持向后兼容，我们正在开发对应的 Jetpack 库，可为 API 15 及以上版本带来这个功能。我们会在之后为大家带来更多这方面的详细信息，敬请期待。
+
+- 校验和类型
+
+  https://developer.android.google.cn/reference/android/content/pm/Checksum
+
+- PackageManager.requestChecksums()
+
+  https://developer.android.google.cn/reference/android/content/pm/PackageManager#requestChecksums(java.lang.String,%20boolean,%20int,%20java.util.List%3Cjava.security.cert.Certificate%3E,%20android.content.pm.PackageManager.OnChecksumsReadyListener)
+
+- 软件包可见性
+
+  https://developer.android.google.cn/training/basics/intents/package-visibility
+
+更多的隐私与安全变更:
+https://developer.android.google.cn/about/versions/12/behavior-changes-12
+
+#### 十、剪切板
+
+为了让用户更清楚地知晓应用何时在读取剪贴板，Android 12 会在每次应用调用 getPrimaryClip() 时在屏幕底部显示一条 Toast 提示信息。如果剪贴板数据来自同一个应用，则不会出现提示信息。我们建议您减少应用对剪贴板的访问，并确保只在符合用户预期的情况下才读取剪贴板。请访问官方文档了解详细信息:
+
+https://developer.android.com/about/versions/12/behavior-changes-all#clipboard-access-notifications
+
+- getPrimaryClip()
+
+  https://developer.android.google.cn/reference/android/content/ClipboardManager#getPrimaryClip()
+![在这里插入图片描述](https://img-blog.csdnimg.cn/25132e534ea240f382d9e5f49c256f7a.png)
+
+#### 十一、前台服务优化
+
+前台服务是应用管理某些面向用户任务的重要方式，但过度使用会影响性能，甚至导致应用被系统终止。为了确保用户获得更好的体验，对于以新平台为目标的应用，我们将阻止从后台启动前台服务。为了帮助大家更轻松地摆脱这种做法，我们在 JobScheduler 中引入了一个新的加急作业 (expedited job)，该作业具有较高的进程优先级、网络访问权限，并且立即运行，不受省电模式 (Battery Saver) 或低电耗模式 (Doze) 等电耗约束的影响。为了实现向下兼容，我们还将加急作业集成到了最新版本的 Jetpack WorkManager 库中。另外，为了减轻对用户的干扰，我们现在将部分前台服务通知的显示延迟了最多 10 秒。这使短暂的任务有机会在通知显示之前完成。请访问官方文档了解详细信息。
+
+以 Android 12 为目标平台的应用在后台运行时无法再启动[前台服务](https://developer.android.google.cn/guide/components/foreground-services)，但[一些特殊情况](https://developer.android.google.cn/about/versions/12/foreground-services#cases-fgs-background-starts-allowed)除外。如果应用在后台运行时尝试启动前台服务，并且前台服务不符合任何特殊情况，则系统会抛出 IllegalStateException
+
+- 加急作业
+
+  https://developer.android.google.cn/reference/android/app/job/JobParameters.html#isExpeditedJob()
+
+- Jetpack WorkManager
+
+  https://developer.android.google.cn/topic/libraries/architecture/workmanager
+
+- 官方文档: 前台服务启动限制
+
+  https://developer.android.google.cn/about/versions/12/behavior-changes-12#foreground-service-launch-restrictions
+
+#### 十二、截屏
+
+Android 12 增加了滚动截屏，截屏后的编辑功能有了小幅度的增强，增加了添加表情和文字的功能
+
+![img](https://img-blog.csdnimg.cn/img_convert/3d42c71b85dbb7574ac2f25d44844a0c.png)
+
+#### 十三、无线WIFI分享
+
+新增了无线网密码功能共享的功能
+
+![img](https://img-blog.csdnimg.cn/img_convert/a638218518be28f3956015afddfbc8ee.png)
+
+#### 十四、重新设计的widget小部件
+
+随着 Android 12 中设计的更新，应用 widget 也已焕然一新，更实用、更美观，且更易于发现。我们增加了新的交互控件，如复选框、开关和单选按钮，并让配置 widget 更轻松。Android 12 widget 与我们的系统 UI 和主题配合起来非常美观，圆角和填充能够自动适应每个启动器和主屏幕。响应式布局能让您将 widget 适配于手机、平板电脑、可折叠设备和其他屏幕。我们还添加了动态色彩 API，这样您的 widget 就可以使用系统颜色来创建个性化且一致的外观。我们还通过改进的 widget 选择器以及与 Assistant 的整合，使得 widget 更易于发现。您可以在这里查看示例代码并上手体验。请访问官方文档了解详细信息:
+
+https://developer.android.google.cn/about/versions/12/features/widgets
+
+- 新的交互控件
+
+  https://developer.android.google.cn/about/versions/12/features/widgets#new-compound-buttons
+
+- 配置 widget
+
+  https://developer.android.google.cn/about/versions/12/features/widgets#apply-configuration-options
+
+- 响应式布局
+
+  https://developer.android.google.cn/about/versions/12/features/widgets#provide-responsive-layouts
+
+- 动态色彩 API
+
+  https://developer.android.google.cn/about/versions/12/features/widgets#dynamic-colors
+
+- 示例代码
+
+  https://github.com/android/user-interface-samples/tree/main/AppWidget
+
+![图片](https://img-blog.csdnimg.cn/img_convert/f94791be53d6a20e29147d364b0127da.png)
+
+#### 十五、QuickSettings
+
+为了让用户更好地了解和管理他们的网络连接，我们在状态栏 (Status Bar)、快速设置 (Quick Settings) 以及设置 (Settings) 中提供了更简明、更直观的连接体验。全新的网络面板 (Internet Panel) 让用户可以轻松切换互联网提供商，以及更轻松地排除网络连接问题。QuickSettings也支持关闭摄像头/麦克风的调用权限。
+
+![图片](https://img-blog.csdnimg.cn/img_convert/08f01b945eaccb0ee4ee531869315e2a.png)
+
+#### 十六、基于墙纸的拓展主题
+
+用户主题的配色可以根据的壁纸的配色做一些调整，当你更换壁纸时，可以选择自动更改系统颜色。Android 12将自动从你的壁纸中取出主色和补色，并将这些颜色应用于系统主题。用户可以在Android 12中自定义系统颜色来匹配壁纸
+![在这里插入图片描述](https://img-blog.csdnimg.cn/82a7b75e53584801a4d51b0928f6351c.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+
+#### 十七、自动休眠
+
+在 Android 12 中，我们在权限自动重置的基础上，对长时间未使用的应用进行智能休眠，从而优化设备存储、性能和安全。休眠不仅会撤销用户之前授予的权限，而且还会强制停止应用，并回收内存、存储和其他临时资源。系统还会阻止休眠的应用在后台运行作业或接收推送通知，来帮助用户保持安全。休眠对大多数应用来说应该是透明的，但如果需要，您可以引导用户到设置中关闭您的应用的休眠功能。请访问官方文档了解详细信息:
+
+https://developer.android.google.cn/about/versions/12/behavior-changes-12#app-hibernation
+
+- 自动重置未使用的应用的权限
+
+  https://developer.android.google.cn/about/versions/11/privacy/permissions#auto-reset
+
+#### 十八、性能表现
+
+在 Android 12 中，我们对性能表现进行了重大且深入的资源投入: 从提升基础性能，以让系统和应用更快更流畅，到为高性能设备设立新的标准，以帮助开发者在这些设备上提供更丰富的体验。
+
+##### 1. 系统性能
+
+更快、更高效的系统性能 - 我们将核心系统服务所需的 CPU 时间减少了 22%，因此设备将更快、更灵敏。我们还将系统服务器对大核的使用减少了 15%，从而提高了 Android 的电源效率，使得设备在需要充电之前能运行更长的时间。
+
+![图片](https://img-blog.csdnimg.cn/img_convert/0e3f0f301fd6d402eaaac723628092bc.png)
+
+通过减少锁争用和延迟的变化程度，改善了应用切换和启动时间。我们还优化了 I/O，以加快应用的加载。在 PackageManager 中，只读快照减少了 92% 的锁争用。在 Binder 中，轻量级缓存从根本上改善了目标调用的延迟，最高可达 47 倍。在 I/O 方面，我们对 dex/odex/vdex 文件进行了加速，以改善应用的加载时间，这在低内存手机上尤为明显。我们对通知跳转 (notification trampoline) 的限制也有助于减少从通知中启动的应用的延迟。例如，在不使用通知跳转后，Google Photos 应用的启动速度提高了 34%。
+
+- 无法通过服务或广播接收器创建通知跳转
+
+  https://developer.android.google.cn/about/versions/12/behavior-changes-12#notification-trampolines
+
+##### 2. 性能等级
+
+从 Android 12 开始，我们与生态系统的合作伙伴一起，为高性能的 Android 设备引入了一个通用标准。
+
+这个标准被称为性能等级 (Performance Class)，其中定义了一套超越 Android 基础要求的性能。符合性能等级要求的设备可以支持更苛刻的用例，并提供更高质量的内容。开发者可以在运行时检查性能等级，然后可靠地提供增强的体验，以充分利用设备的性能
+
+- 检查设备性能等级
+
+  https://developer.android.google.cn/reference/android/os/Build.VERSION.html#MEDIA_PERFORMANCE_CLASS
+
+目前我们将性能等级指标的重点放在媒体用例上，涵盖的指标包括摄像头启动延迟、可用的编解码器和编码质量、最低内存大小、屏幕分辨率和读/写性能。请访问官方文档了解详细信息:
+
+https://developer.android.google.cn/about/versions/12/features/performance-class
+
+#### 十九、富内容插入
+
+用户喜欢看图像、视频和其他富有表现力的内容，但在应用中插入和移动这些内容并不总是那么容易。为了让您的应用能够快速接收富内容，我们引入了一个新的统一 API，让您能够接受任何来源的内容: 剪贴板、键盘或拖放。您可以将新接口 OnReceiveContentListener 附加到界面组件上，并在通过任何机制插入内容时获得回调。此回调将成为代码处理所有内容插入的唯一位置，从纯文本和样式文本到标记、图像、视频、音频文件等。为了实现向下兼容，我们已将统一的 API 加入了 AndroidX。请访问官方文档了解详细信息。
+
+- OnReceiveContentListener
+
+  https://developer.android.google.cn/reference/android/view/OnReceiveContentListener
+
+- OnReceiveContentListener (AndroidX)
+
+  https://developer.android.google.cn/reference/androidx/core/view/OnReceiveContentListener
+
+- 官方文档: 接收内容的统一 API
+
+  https://developer.android.google.cn/about/versions/12/features/unified-content-api
+
+#### 二十、手势导航的沉浸模式 API 改进
+
+简化了沉浸模式，使手势导航在多种场景下，如观看视频、阅读书籍或玩游戏时，更简单、更连贯。在游戏相关的全屏体验中，我们仍然会保护应用不受意外手势的影响，但在所有其他全屏或沉浸式体验中 (如视频播放器、阅读、图册)，对于针对新平台的应用，我们将改变默认设置，允许用户通过单次滑动来进行导航。请访问官方文档了解详细信息。
+
+- 确保应用不受意外手势影响
+
+  https://developer.android.google.cn/reference/android/view/WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+- 官方文档: 沉浸模式改进
+
+  https://developer.android.google.cn/about/versions/12/behavior-changes-12#immersive-mode-improvements
+
+#### 二十一、圆角支持
+
+多现代设备的屏幕采用圆角设计，这彰显了简洁时尚的风格，但也为应用开发者带来一些额外的问题。要在这些设备上提供出色的用户体验，开发者需要将这些圆角纳入考虑，调整圆角附近的界面元素，防止出现裁切的情况。
+
+为了解决这个问题，我们引入了新的 API，便于您查询圆角及其详情。RoundedCorner 提供了圆角半径、中心点等信息。您可以通过 Display.getRoundedCorner() 来获取每个圆角的详尽信息。您还可以调用 WindowInsets.getRoundedCorner() 来获取基于您的应用边界的圆角位置等信息。如此一来，您就可以根据需要灵活调整界面元素和内容的位置。请访问官方文档了解详细信息。
+
+- 官方文档: 圆角 API
+
+  https://developer.android.google.cn/about/versions/12/features#rounded_corner_apis
+
+- RoundedCorner
+
+  https://developer.android.google.cn/reference/android/view/RoundedCorner
+
+- Display.getRoundedCorner()
+
+  https://developer.android.google.cn/reference/android/view/Display#getRoundedCorner(int)
+
+- WindowInsets.getRoundedCorner()
+
+  https://developer.android.google.cn/reference/android/view/WindowInsets#getRoundedCorner(int)
+
+![图片](https://img-blog.csdnimg.cn/img_convert/74ef8b816983641e1fe6b175cb9056b1.png)
+
+#### 二十二、画中画 (Picture in Picture, PIP) 改进
+
+对于使用手势导航的用户，我们改进了应用在上划到主屏幕时过渡到画中画 (PIP) 模式的方式。如果某个应用启用了自动 PIP，系统现在会在用户上划到主屏幕时直接将该应用过渡到 PIP 模式，而不是等待上划到主屏幕的动画完成。这使过渡更加平滑，并提高了感知表现。我们还针对非视频内容改进了 PIP 窗口的大小调整方式。应用现在可以启用无缝调整大小，使系统根据需要调整 PIP Activity 的大小。Android 12 还支持隐藏 PIP 窗口，只需将 PIP 窗口拖动至屏幕左侧或右侧边缘即可。此外，为使 PIP 窗口更易于操控，我们更新了点按行为: 现在单次点按即可显示控件，点按两次即可切换 PIP 窗口大小。请访问官方文档了解详细信息。
+
+- 官方文档: PIP 改进
+
+  https://developer.android.google.cn/about/versions/12/features/pip-improvements
+
+- 自动 PIP
+
+  https://developer.android.google.cn/reference/android/app/PictureInPictureParams.Builder#setAutoEnterEnabled(boolean)
+
+- 启用无缝调整大小
+
+  https://developer.android.google.cn/reference/android/app/PictureInPictureParams.Builder#setSeamlessResizeEnabled(boolean)
+
+#### 二十三、保持配套设备应用唤醒
+
+对于管理智能手表和健身跟踪器等配套设备的应用，如何确保关联的配套设备位于附近时保持运行和连接状态是个难题。为了更轻松地解决这个问题，我们为扩展设备管理器 (Companion Device Manager) 带来了新的 CompanionDeviceService API。管理配套设备的应用可以通过这个服务，让系统在关联配套设备位于附近时唤醒应用。当设备在附近时，系统会确保服务处于唤醒状态，并且当设备进入和离开连接范围或关机时，系统会向服务发出通知，以便应用根据需要清理状态。在连接至手表时，应用还可以使用新的配套设备配置，通过绑定相关权限至单次授权来简化注册过程。请访问官方文档了解详细信息。
+
+- 官方文档: 保持配套应用唤醒
+
+  https://developer.android.google.cn/about/versions/12/features#keep-awake
+
+- 扩展设备管理器
+
+  https://developer.android.google.cn/reference/android/companion/CompanionDeviceManager
+
+- CompanionDeviceService API
+
+  https://developer.android.google.cn/reference/android/companion/CompanionDeviceService
+
+- 配套设备配置
+
+  https://developer.android.google.cn/reference/android/companion/AssociationRequest.Builder#setDeviceProfile(java.lang.String)
+
+#### 二十三、改进带宽估测
+
+有些开发者需要了解用户的可用带宽，以便定制体验，我们现在改进了带宽估测功能，增强了现有的带宽估测 API，可以针对设备上的所有用户给出各运营商或 Wi-Fi SSID、网络类型、信号强度的数据吞吐量预估。新的估测方法相较于其他大多数方法更为简单准确，欢迎大家试用并反馈使用效果。
+
+- 带宽估测 API
+
+  https://developer.android.google.cn/about/versions/11/features/5g#estimator
+
+#### 二十四、通话通知模板
+
+正在拨入或进行的通话对用户来说很重要，它们需要易于查看和管理。在 Android 12 中，我们改进了呼叫通知，提升了可见性，且更易于快速浏览，并加强了与其他通知组件的一致性。如果您的应用 (比如拨号器应用或带有视频通话的聊天应用) 能够提供电话功能，不妨试试新增的 CallStyle 模板。您可以用它来创建来电、呼出和屏蔽电话的通知。每种类型都支持多种操作，包括默认操作和应用自定义操作。您还可以附加大型头像图片，提供文字，并设置按钮颜色。操作系统赋予了 CallStyle 通知高度的可见性，比如将它们置于通知区块的顶部。请访问官方文档了解详细信息。
+
+- 官方文档: 新的通话特性
+
+  https://developer.android.com/about/versions/12/features#new-calls
+
+- CallStyle
+
+  https://developer.android.google.cn/reference/android/app/Notification.CallStyle.html
+
+#### 二十五、精确闹钟的新权限
+
+闹钟是应用安排定时工作的重要方式。在大多数情况下，应用应该使用非精确闹钟 (inexact alarms)，这样可以减少电池消耗。Android 系统可以通过低电耗模式 (Doze) 和应用待机模式 (App Standby) 等机制管理这些闹钟，从而最大限度地减少设备唤醒和电池消耗。对于那些需要精确闹钟的情况，例如闹铃应用和定时器，您仍然可以使用精确闹钟 (exact alarms)。精确闹钟功能非常方便可靠，但也会加大电量消耗，在过度使用的情况下尤其如此。所以在 Android 12 中，我们正在做出一些改变，让用户拥有更多的控制权。
+
+- 非精确闹钟
+
+  https://developer.android.google.cn/reference/android/app/AlarmManager#setAndAllowWhileIdle(int,%20long,%20android.app.PendingIntent)
+
+- 针对低电耗模式和应用待机模式进行优化
+
+  https://developer.android.google.cn/training/monitoring-device-state/doze-standby
+
+- 精确闹钟
+
+  https://developer.android.google.cn/reference/android/app/AlarmManager#setExact(int,%20long,%20android.app.PendingIntent)
+
+针对 Android 12 的应用如果想要使用精确闹钟，现在需要申请一个新的权限: SCHEDULE_EXACT_ALARM。这是一个一般权限，所以只要您的应用在清单中进行了声明，就会在第一次启动时被自动授予该权限。不过，我们也会让用户看到拥有这个权限的应用，并让他们通过设置中的特殊应用权限 (Special App Access Permissions) 授予和撤销这个 "闹钟和提醒" 权限。如果您的应用需要精确闹钟，请务必处理好应用不再拥有这个权限的情况。我们已经添加了一个新的 API，canScheduleExactAlarms()，供您检查应用的权限状态。一般来说，我们建议您尽可能将应用调整为不再需要使用精确闹钟。请访问官方文档了解详细信息。
+![在这里插入图片描述](https://img-blog.csdnimg.cn/e595912e841c4c5a8b3bfda6f43fc656.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+
+
+- 官方文档: 精确闹钟权限
+
+  https://developer.android.com/about/versions/12/behavior-changes-12#exact-alarm-permission
+
+- SCHEDULE_EXACT_ALARM
+
+  https://developer.android.google.cn/reference/android/Manifest.permission#SCHEDULE_EXACT_ALARM
+
+- canScheduleExactAlarms()
+
+  https://developer.android.google.cn/reference/android/app/AlarmManager.html#canScheduleExactAlarms()
+
+#### 二十六、改进的网络链接
+
+在 Android 12 中，我们正在做出一些改变，以确保用户能更快速顺畅地访问内容。首先，我们修改了对未经 Android 应用链接 (App Links) 验证或者未经用户手动批准的链接的处理方式。现在操作系统会直接在默认浏览器中打开这些链接，而不是展示一个选择对话框。为了让用户更容易批准您的应用使用链接，我们准备了一个新的 Intent 来将用户带到设置的 "默认打开方式" 选项中。如果您希望确保只有您的应用能处理来自您的域的链接，您可以使用 App Links。我们还添加了新的 adb 命令来帮助您配置和测试自己的链接。请访问官方文档了解详细信息。
+
+- 官方文档: 网络 Intent 解决方案
+
+  https://developer.android.google.cn/about/versions/12/web-intent-resolution
+
+- Android 应用链接
+
+  https://developer.android.google.cn/training/app-links
+
+- 新的 Intent
+
+  https://developer.android.google.cn/reference/android/provider/Settings?ENABLE_REBRAND=false#ACTION_APP_OPEN_BY_DEFAULT_SETTINGS
+
+#### 二十七、丰富的振动体验
+
+扩展了提供的工具，用来为 UI 事件打造富有情景感的震动反馈，为游戏提供更沉浸愉悦的体验，以及营造有助于提升生产力的触觉效果。通过活用最新震动单元提供的更宽广的频率范围，我们带来了更具表现力的震动效果，比如 "低声滴答"。游戏开发者也可以控制游戏手柄里的多个不同的震动单元，让它们同步产生相同的震动效果，或是通过多个单元的组合产生不同的效果。我们推荐开发者使用这些常量和原语来构建丰富的震动效果: 常量用于强化 UI 事件，震动合成器 (haptic composer) 用于组合不同的原语来实现更复杂的效果。您现在可以在 Pixel 4 设备上完整体验这些 API，我们也在和设备制造商合作伙伴们一起为生态系统内的用户们带来最新的震动支持。
+
+- 低声滴答: PRIMITIVE_LOW_TICK
+
+  https://developer.android.google.cn/reference/android/os/VibrationEffect.Composition#PRIMITIVE_LOW_TICK
+
+- 震动单元: VibratorManager
+
+  https://developer.android.google.cn/reference/android/os/VibratorManager.html
+
+- 多个震动单元: CombinedVibrationEffect
+
+  https://developer.android.google.cn/reference/android/os/CombinedVibrationEffect.html
+
+- 常量: HapticFeedbackConstants
+
+  https:///developer.android.google.cn/reference/android/view/HapticFeedbackConstants
+
+- 原语/震动合成器: VibrationEffect.Composition
+
+  https://developer.android.google.cn/reference/android/os/VibrationEffect.Composition#summary
+
+#### 二十八、更好地调试原生代码崩溃
+
+调试 NDK 相关的崩溃很困难。在 Android 12 中，我们提供了更多可操作的诊断，让调试变得更加简单。在这个平台上，我们使用崩溃转储文件 (称为 tombstone) 来调试原生崩溃，文件里包含了诊断各种问题所需的信息，包括通过 ART 进行调用堆栈展开 (unwinding)，与 fdsan 集成，以及针对 GWP-ASan/HWASan/MTE 崩溃堆栈生成的录制文件。现在，我们通过 App Exit Reasons API，让应用得以访问其自身的 tombstone 文件。当您的应用通过 REASON_CRASH_NATIVE 使用 ApplicationExitInfo 时，您可以调用 getTraceInputStream() 来获取 protobuf 格式的 tombstone 数据。
+
+- 崩溃转储和 Tombstone
+
+  https://source.android.google.cn/devices/tech/debug#debuggerd
+
+- 文件描述符排错程序 (fdsan)
+
+  https://developer.android.google.cn/about/versions/11/behavior-changes-all#fdsan
+
+- GWP-ASan
+
+  https://developer.android.google.cn/ndk/guides/gwp-asan
+
+- HWASan
+
+  https://source.android.google.cn/devices/tech/debug/hwasan
+
+- MTE
+
+  https://source.android.google.cn/devices/tech/debug/tagged-pointers
+
+- App Exit Reasons API
+
+  https://developer.android.google.cn/reference/kotlin/android/app/ActivityManager#gethistoricalprocessexitreasons
+
+- REASON_CRASH_NATIVE
+
+  https://developer.android.google.cn/reference/kotlin/android/app/ApplicationExitInfo#reason_crash_native
+
+- ApplicationExitInfo
+
+  https://developer.android.google.cn/reference/kotlin/android/app/ApplicationExitInfo
+
+- getTraceInputStream()
+
+  https://developer.android.google.cn/reference/android/app/ApplicationExitInfo#getTraceInputStream()
+
+#### 二十九、更灵活的备份配置
+
+Android 的备份服务让用户可以毫不费力地将数据还原或迁移到新设备上。应用是用户体验的核心，确保用户能够转移应用数据，并继续使用应用十分重要。备份服务既支持云端备份到 Google Drive，也支持设备到设备的传输，开发者只需对应用进行极小的改动，就可以使用这些功能。对于以 Android 12 为目标的应用，我们正在改进服务，为您提供更多的灵活性和控制权。我们更新了 XML 配置格式，因此您现在可以为云端备份和设备到设备传输设置不同的规则。例如，您可以将体积较大的文件从云端备份中排除，但在设备到设备的传输中将其加入。您还可以为备份或传输分别设置加密需求。最后，如果您想关闭设备到设备传输的自动备份，请使用新的配置格式代替 allowBackup 清单属性。请访问官方文档了解详细信息。
+
+- 官方文档: 备份还原
+
+  https://developer.android.google.cn/about/versions/12/backup-restore
+
+- allowBackup
+
+  https://developer.android.google.cn/reference/android/R.attr.html#allowBackup
