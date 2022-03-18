@@ -1,0 +1,229 @@
+﻿Handler是如何实现延迟消息的？针对这个问题，我们从源码的角度来剖析一下Handler延时消息的实现逻辑.
+
+handler核心的发送消息的方法是sendMessage，有的朋友会说那post呢？
+>PS：post的话其实算是一个handler的语法糖，传入runnable后帮助我们构建一个message
+
+```java
+/**
+     * Causes the Runnable r to be added to the message queue.
+     * The runnable will be run on the thread to which this handler is 
+     * attached. 
+     *  
+     * @param r The Runnable that will be executed.
+     * 
+     * @return Returns true if the Runnable was successfully placed in to the 
+     *         message queue.  Returns false on failure, usually because the
+     *         looper processing the message queue is exiting.
+     */
+    public final boolean post(Runnable r)
+    {
+       return  sendMessageDelayed(getPostMessage(r), 0);
+    }
+
+
+    private static Message getPostMessage(Runnable r) {
+        Message m = Message.obtain();
+        m.callback = r;
+        return m;
+    }
+```
+可以看到getPostMessage里帮我们构建出一个message然后再调用sendMessageDelayed。
+
+接下来看sendMessage，类似于startActivity最终都会走到startActivityForResult一样，handler所有发送消息的方法最终都会走到sendMessageDelayed，只是delayMillis不同而已，这个delayMillis就是延时的时间。
+
+```java
+/**
+     * Pushes a message onto the end of the message queue after all pending messages
+     * before the current time. It will be received in {@link #handleMessage},
+     * in the thread attached to this handler.
+     *  
+     * @return Returns true if the message was successfully placed in to the 
+     *         message queue.  Returns false on failure, usually because the
+     *         looper processing the message queue is exiting.
+     */
+    public final boolean sendMessage(Message msg)
+    {
+        return sendMessageDelayed(msg, 0);
+    }
+    
+    public final boolean sendMessageDelayed(Message msg, long delayMillis)
+    {
+        if (delayMillis < 0) {
+            delayMillis = 0;
+        }
+        return sendMessageAtTime(msg, SystemClock.uptimeMillis() + delayMillis);
+    }
+```
+然后这里会将DelayMillis加上当前开机的时间（这里可以理解就是这个time就是，现在的时间+需要延迟的时间=实际执行的时间），接下来进到sendMessageAtTime方法里面
+
+```java
+/**
+     * Enqueue a message into the message queue after all pending messages
+     * before the absolute time (in milliseconds) <var>uptimeMillis</var>.
+     * <b>The time-base is {@link android.os.SystemClock#uptimeMillis}.</b>
+     * Time spent in deep sleep will add an additional delay to execution.
+     * You will receive it in {@link #handleMessage}, in the thread attached
+     * to this handler.
+     * 
+     * @param uptimeMillis The absolute time at which the message should be
+     *         delivered, using the
+     *         {@link android.os.SystemClock#uptimeMillis} time-base.
+     *         
+     * @return Returns true if the message was successfully placed in to the 
+     *         message queue.  Returns false on failure, usually because the
+     *         looper processing the message queue is exiting.  Note that a
+     *         result of true does not mean the message will be processed -- if
+     *         the looper is quit before the delivery time of the message
+     *         occurs then the message will be dropped.
+     */
+    public boolean sendMessageAtTime(Message msg, long uptimeMillis) {
+        MessageQueue queue = mQueue;
+        if (queue == null) {
+            RuntimeException e = new RuntimeException(
+                    this + " sendMessageAtTime() called with no mQueue");
+            Log.w("Looper", e.getMessage(), e);
+            return false;
+        }
+        return enqueueMessage(queue, msg, uptimeMillis);
+    }
+    
+    
+    private boolean enqueueMessage(MessageQueue queue, Message msg, long uptimeMillis) {
+        msg.target = this;
+        if (mAsynchronous) {
+            msg.setAsynchronous(true);
+        }
+        return queue.enqueueMessage(msg, uptimeMillis);
+    }
+```
+其实到这里handler的任务就完成了，把message发送到messageQueue里面，每个消息都会带有一个uptimeMillis参数，这就是延时的时间。
+
+接下来我们看messageQueue里面queue.enqueueMessage这个方法。
+
+```java
+
+ boolean enqueueMessage(Message msg, long when) {
+        if (msg.target == null) {
+            throw new IllegalArgumentException("Message must have a target.");
+        }
+        if (msg.isInUse()) {
+            throw new IllegalStateException(msg + " This message is already in use.");
+        }
+
+        synchronized (this) {
+            if (mQuitting) {
+                IllegalStateException e = new IllegalStateException(
+                        msg.target + " sending message to a Handler on a dead thread");
+                Log.w(TAG, e.getMessage(), e);
+                msg.recycle();
+                return false;
+            }
+
+            msg.markInUse();
+            msg.when = when;
+            Message p = mMessages;
+            boolean needWake;
+            if (p == null || when == 0 || when < p.when) {
+                // New head, wake up the event queue if blocked.
+                msg.next = p;
+                mMessages = msg;
+                needWake = mBlocked;
+            } else {
+                // Inserted within the middle of the queue.  Usually we don't have to wake
+                // up the event queue unless there is a barrier at the head of the queue
+                // and the message is the earliest asynchronous message in the queue.
+                needWake = mBlocked && p.target == null && msg.isAsynchronous();
+                Message prev;
+                for (;;) {
+                    prev = p;
+                    p = p.next;
+                    if (p == null || when < p.when) {
+                        break;
+                    }
+                    if (needWake && p.isAsynchronous()) {
+                        needWake = false;
+                    }
+                }
+                msg.next = p; // invariant: p == prev.next
+                prev.next = msg;
+            }
+
+            // We can assume mPtr != 0 because mQuitting is false.
+            if (needWake) {
+                nativeWake(mPtr);
+            }
+        }
+        return true;
+    }
+```
+首先是进行msg的一些属性判断，handler发出的target值必须不为空，是为了通过target值来判断是哪个handler发过来的消息的。
+
+顺便说一说 并不是所有的msg，target值都必须不为空
+
+>PS:（handler的同步屏障就是一个target为空的msg，用来优先执行异步方法的）
+
+同步屏障有一个很重要的使用场所就是接受垂直同步Vsync信号，用来刷新页面view的。因为为了保证view的流畅度，所以每次刷新信号到来的时候，要把其他的任务先放一放，优先刷新页面。
+
+接下来主要就是将这个msg根据实际执行时间进行排序插入到queue里面（看里面的for循环）。
+
+```java
+                for (;;) {
+                    prev = p;
+                    p = p.next;
+                    if (p == null || when < p.when) {
+                        break;
+                    }
+                    if (needWake && p.isAsynchronous()) {
+                        needWake = false;
+                    }
+                }
+```
+好了，现在queue也构建完成了，假设我现在第一条消息就是要延迟10秒，怎么办呢。实际走一边咯。
+
+假设我现在是looper，我要遍历这个messageQueue，那肯定要调用next方法。
+
+next()方法比较长，我只贴关于延时消息的核心部分。
+
+```java
+  for (;;) {
+            if (nextPollTimeoutMillis != 0) {
+                Binder.flushPendingCommands();
+            }
+
+            nativePollOnce(ptr, nextPollTimeoutMillis);
+
+            synchronized (this) {
+                // Try to retrieve the next message.  Return if found.
+                final long now = SystemClock.uptimeMillis();
+                Message prevMsg = null;
+                Message msg = mMessages;
+                if (msg != null && msg.target == null) {
+                    // Stalled by a barrier.  Find the next asynchronous message in the queue.
+                    do {
+                        prevMsg = msg;
+                        msg = msg.next;
+                    } while (msg != null && !msg.isAsynchronous());
+                }
+                if (msg != null) {
+                    if (now < msg.when) {
+                        // Next message is not ready.  Set a timeout to wake up when it is ready.
+                        nextPollTimeoutMillis = (int) Math.min(msg.when - now, Integer.MAX_VALUE);
+                    }
+                   // ……………
+```
+可以看到这里也是一个for循环遍历队列，核心变量就是nextPollTimeoutMillis。可以看到，计算出nextPollTimeoutMillis后就调用nativiePollOnce这个native方法。这里的话大概可以猜到他的运行机制，因为他是根据执行时间进行排序的，那传入的这个nextPollTimeoutMillis应该就是休眠时间，类似于java的sleep(time)。休眠到下一次message的时候就执行。那如果我在这段时间又插入了一个新的message怎么办，所以handler每次插入message都会唤醒线程，重新计算插入后，再走一次这个休眠流程。
+
+
+nativiePollOnce这个native方法可以通过名字知道，他用的是linux中的epoll机制，具体是调用了epoll_wait这个方法。
+
+```java
+ int epoll_wait(int epfd, struct epoll_event * events, intmaxevents, int timeout);
+```
+这个epoll和select一样都是linux的一个I/O多路复用机制，主要原理就不深入了，这里大概了解一下I/O多路复用机制和它与Select的区别就行。
+
+**Linux里的I/O多路复用机制**：举个例子就是我们钓鱼的时候，为了保证可以最短的时间钓到最多的鱼，我们同一时间摆放多个鱼竿，同时钓鱼。然后哪个鱼竿有鱼儿咬钩了，我们就把哪个鱼竿上面的鱼钓起来。这里就是把这些全部message放到这个机制里面，那个time到了，就执行那个message。
+
+**epoll与select的区别**：epoll获取事件的时候采用空间换时间的方式，类似与事件驱动，有哪个事件要执行，就通知epoll，所以获取的时间复杂度是O（1），select的话则是只知道有事件发生了，要通过O（n）的事件去轮询找到这个事件。
+
+Q ：Android中主线程为什么不会因为Looper.loop()里的死循环阻塞？
+>A：主线程确实阻塞了，但是主线程在初始化过程中由ActivityThread的main()方法中会创建一套消息循环组件包括：Looper、MessageQueue、Handler，然后由MessageQueue中的next()调用底层MessageQueue，通过epoll进行阻塞，主线程有消息的时候通过发送消息激活线程，所以阻塞在epoll wait，并不是for的死循环等待，并不占用CPU资源

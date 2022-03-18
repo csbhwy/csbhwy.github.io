@@ -1,0 +1,155 @@
+﻿@[toc]
+#### 前言
+1. 如何将带源码的 APK 预置进系统？
+
+2. 如何将无源码的APK预置进系统？
+
+3. 如何预置APK使得用户可以卸载，恢复出厂设置时不能恢复？
+
+4. 如何预置APK使得用户可以卸载，并且恢复出厂设置时能够恢复？
+
+#### 四种预置情况的实现
+##### 1. 如何将带源码的APK预置进系统？
+1. 在 packages/apps 下面以需要预置的 APK的 名字创建一个新文件夹，以预置一个名为Test的APK 为例
+
+2. 将 Test APK的Source code 拷贝到 Test 文件夹下，删除 /bin 和 /gen 目录
+
+3. 在 Test 目录下创建一个名为 Android.mk的文件，内容如下：
+
+```shell
+LOCAL_PATH:= $(call my-dir)
+include $(CLEAR_VARS)
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := $(call all-subdir-java-files)
+LOCAL_PACKAGE_NAME := Test
+include $(BUILD_PACKAGE) 
+```
+4. 打开文件 build/target/product/${Project}.mk （其中 ${Project} 表示工程名）
+将 Test 添加到 PRODUCT_PACKAGES 里面。
+
+5. 重新 build 整个工程
+
+##### 2. 如何将无源码的 APK 预置进系统？
+1. 在 packages/apps 下面以需要预置的 APK 名字创建文件夹，以预置一个名为Test的APK为例
+
+2. 将 Test.apk 放到 packages/apps/Test 下面
+
+3. 在  packages/apps/Test 下面创建文件 Android.mk，文件内容如下：
+
+
+```shell
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+# Module name should match apk name to be installed
+LOCAL_MODULE := Test
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := $(LOCAL_MODULE).apk
+LOCAL_MODULE_CLASS := APPS
+LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
+LOCAL_CERTIFICATE := PRESIGNED
+include $(BUILD_PREBUILT)
+```
+4. 打开文件 build/target/product/${Project}.mk （其中 ${Project} 表示工程名）
+将 Test 添加到 PRODUCT_PACKAGES 里面。
+
+5. 将从Test.apk解压出来的 so库拷贝到alps/vendor/mediatek/${Project}/artifacts/out/target/product/${Project}/system/lib/目录下，若无 so 库，则去掉此步；
+
+6. 重新 build 整个工程
+
+>注：Google在KK上修改protection Level为System的permission控管机制
+如果App使用System Level的permission，需要預置到/system/priv-app底下 (原在/system/app)。
+
+举例来讲：
+关于获取副SD卡的写入权限的案例，App需要在AndroidManifest.xml宣告WRITE_MEDIA_STORAGE permission获取副卡的写入权限
+```xml
+<uses-permission android:name="android.permission.WRITE_MEDIA_STORAGE" />
+```
+(Ref: frameworks/base/core/res/AndroidManifest.xml)
+
+已知android.permission.WRITE_MEDIA_STORAGE属于SystemOrSignature level的permission，定义如下：
+
+```xml
+<!-- @SystemApi @TestApi Allows an application to write to internal media storage
+         @hide  -->
+<permission android:name="android.permission.WRITE_MEDIA_STORAGE"
+        android:protectionLevel="signature|privileged" />
+```
+
+你需要采用以下方法，获取该permission：
+修改Android.mk，增加LOCAL_PRIVILEGED_MODULE := true，以声明app需要放在/system/priv-app下。
+
+##### 3. 如何预置APK使得用户可以卸载，恢复出厂设置时不能恢复？
+
+1. 在 packages/apps 下面以需要预置的 APK 名字创建文件夹，以预置一个名为Test的APK为例
+
+2. 将 Test.apk 放到 packages/apps/Test 下面；
+
+3. 在  packages/apps/Test 下面创建文件 Android.mk，文件内容如下：
+```shell
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+# Module name should match apk name to be installed
+LOCAL_MODULE := Test
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := $(LOCAL_MODULE).apk
+LOCAL_MODULE_CLASS := APPS
+LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
+LOCAL_CERTIFICATE := PRESIGNED
+LOCAL_MODULE_PATH := $(TARGET_OUT_DATA_APPS)
+include $(BUILD_PREBUILT)
+```
+4. 打开文件 build/target/product/${Project}.mk （其中 ${Project} 表示工程名）
+将 Test 添加到 PRODUCT_PACKAGES 里面。
+
+5. 重新 build 整个工程
+>注意：这个比不能卸载的多了一句
+LOCAL_MODULE_PATH := $(TARGET_OUT_DATA_APPS)
+
+ 
+
+##### 4. 如何预置APK使得用户可以卸载，并且恢复出厂设置时能够恢复？
+有两种方法：
+
+方法一：预置apk到system/vendor/operator下面
+
+具体做法如下：
+
+在packages/apps下面以需要预置的 APK 名字创建文件夹，以预置一个名为Test的APK为例：
+
+1. 将Test.apk 放到 packages/apps/Test 下面；
+
+2. 在packages/apps/Test下面创建文件 Android.mk，文件内容如下：
+```shell
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+# Module name should match apk name to be installed
+LOCAL_MODULE := Test
+LOCAL_MODULE_TAGS := optional
+LOCAL_SRC_FILES := $(LOCAL_MODULE).apk
+LOCAL_MODULE_CLASS := APPS
+LOCAL_MODULE_SUFFIX := $(COMMON_ANDROID_PACKAGE_SUFFIX)
+LOCAL_CERTIFICATE := PRESIGNED
+LOCAL_MODULE_PATH := $(TARGET_OUT)/vendor/operator/app
+include $(BUILD_PREBUILT) 
+```
+3. 打开文件 build/target/product/${Project}.mk （其中 ${Project} 表示工程名）， 将 Test 添加到 PRODUCT_PACKAGES 里面
+
+4. 重新 build 整个工程
+
+ 
+
+方法二：使用MTK_SPECIAL_FACTORY_RESET，再配合.keep_list / .restore_list
+
+大致的做法是：
+  - 在vendor/mediatek/project_name/artifacts/out/target/product/project_name/system目录下新建一个名为appbackup的文件夹，将该应用的apk文件copy到appbackup文件夹下
+  - 在mediatek/config/project_name/ProjectConfig.mk文件中添加定义：MTK_SPECIAL_FACTORY_RESET=yes
+   - 在vendor/mediatek/project_name/artifacts/out/target/product/project_name/data/app下创建一个.restore_list，并且在其中添加语句：
+/system/appbackup/xxx.apk（注意，.restore_list中的每一行都要以"/system” 开头）
+
+当卸载了data/app下的apk后，再恢复出厂设置，系统会从 .restore_list 中读取apk的名字，然后从 appbackup 文件中把apk重新拷贝到data/app下，从而恢复data/app下已经卸载了的apk。
+
+同时，还需要在vendor/mediatek/project_name/artifacts/out/target/product/project_name/data/app目录下创建一个空文件，命名为.keep_list(.keep_list的用途是，如果安装了A,B,C三个APK到DATA，在恢复出厂设置时，想要将A保留，那么就将A写入到.KEEP_LIST,这样，A会被保留，B,C会被删除。如果没有这个文件，那么所有的APK都会被保留。
+
+以上操作过程，DCC 上面也有相应的文档可供参考，文档的名字叫： Android SD upgrade application note.docx，里面有一项：MTK special factory reset，就详细地介绍了以上操作步骤。
+
+注：该方法从k开始不建议使用，原因：从K版本开始，DVM取dex文件的路径变成了绝对路径，而PMS和installd用的都是文件路径，如果用MTK_SPECICAL_FACTORY_RESET配合.restore_list的方式恢复apk的话，这种上下不sync会导致一些问题，比如：恢复出厂设置后三方应用报错、恢复出厂设置后user版本move to phonestorage报错、多次恢复出厂设置开机提示"Android系统正在升级"等。

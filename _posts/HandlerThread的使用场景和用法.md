@@ -1,0 +1,273 @@
+﻿@[toc]
+相信很多同学都听说并使用过HandlerThread、Thread、Handler，但具体对这三种的用法和区别你真有认真总结过吗？
+本文帮你区别并了解三者的基本用法。
+##### Thread基本用法
+
+Thread类实现了Runnable接口，必须重写run()方法；
+
+```java
+//匿名内部类形式
+new Thread(new Runnable() {
+        
+        @Override
+        public void run() {
+            // TODO Auto-generated method stub
+        }
+});
+```
+
+或者
+
+```java
+class myThread implements Runnable {
+
+    @Override
+    public void run() {
+        // TODO Auto-generated method stub
+    }
+}
+```
+
+
+启动一个线程，用start()方法；
+
+##### HandlerThread基本用法
+
+看源码开头的方法注释，我们可以很清楚的了解这个类的用途：
+
+```java
+/*
+Handy class for starting a new thread that has a looper.
+The looper can then be used to create handler classes.
+Note that start() must still be called.
+*/
+```
+翻译过来就是：
+使用HandlerThread可以方便的开启一个线程，并且这个线程已经绑定了一个looper了。这个looper可以用来new一个handler类。注意在此之前，要调用start()方法。
+
+示例代码如下：
+
+```java
+HandlerThread thread1 = new HandlerThread("test1");
+thread1.start();
+```
+看到这里很多同学可能会产生一个疑问，为什么这个线程已经绑定了一个Looper了呢？还要在此之前调用start()方法？
+
+答案就是：提前调用start()方法就是为了为线程绑定Looper的。
+我们知道，start()方法可以开启一个线程，调用线程的run()方法。而HandlerThread的run()方法是这样的：
+
+```java
+@Override
+public void run() {
+    mTid = Process.myTid();
+    Looper.prepare();// HandlerThread在start()的时候执行run()方法，而Looper就是在这里被创建的
+    synchronized (this) {
+        mLooper = Looper.myLooper();
+        notifyAll();
+    }
+    Process.setThreadPriority(mPriority);
+    onLooperPrepared();
+    Looper.loop();
+    mTid = -1;
+}
+```
+看到没，run()方法里面调用Looper.prepare()来为线程绑定一个Looper。 Looper.loop()开启消息循环。相当于把原来的需要调用Looper.prepare()、Looper.loop()做了一下封装。
+
+有了Looper之后，我们就可以创建Handler，就可以在这个线程里面发送消息、处理消息了。
+
+##### HandlerThread和Handler结合使用
+
+我们知道，Handler在使用时，需要一个Looper(以及Looper的消息队列MessageQueue)，这样它才能发送消息，处理消息。
+
+根据Handler创建方法的不同，我们可以这样用：
+
+```java
+HandlerThread thread1 = new HandlerThread("test1");
+thread1.start();
+Handler mHandler = new Handler(thread1.getLooper()); // Handler创建方法1
+```
+    
+// 或者： Handler创建方法2
+
+```java
+Handler mHandler = new Handler(thread1.getLooper(), new Callback() {
+    @Override
+    public boolean handleMessage(Message msg) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+});
+```
+   
+// 或者 Handler创建方法3
+
+```java
+Handler.Callback callback = new Handler.Callback() {
+    @Override
+    public boolean handleMessage(Message msg) {
+        // TODO Auto-generated method stub
+        return false;
+    }
+};
+
+Handler mHandler = new Handler(thread1.getLooper(), callback);
+```
+// Handler创建方法4，重写HandleMessage方法
+
+```java
+static class TestHandler extends Handler {
+    public TestHandler(Looper looper) {
+        super(looper);
+    }
+    @Override
+    public void handleMessage(Message msg) {
+        
+    }
+}
+```
+HandlerThread 终止消息循环的方法
+
+使用完HandlerThread时，不要忘了退出消息循环。
+
+HandlerThread终止消息循环有两种方法，quit()和quitSafely()，调用的是Looper的对用方法，而Looper调用的是MessageQueue的对应方法。
+
+quitSafely()源码：
+
+```java
+public boolean quitSafely() {
+    Looper looper = getLooper();
+    if (looper != null) {
+        looper.quitSafely();
+        return true;
+    }
+    return false;
+}
+```
+发现HandlerThread的quitSafely()其实是调用了Looper的quitSafely()方法：
+
+```java
+public void quitSafely() {
+    mQueue.quit(true);
+}
+```
+同样，HandlerThread的quit()则是调用了Looper的quit()方法：
+
+```java
+public void quit() {
+    mQueue.quit(false);
+}
+```
+##### 用例演示
+1. 首先是DownloadThread类，继承于HandlerThread，用于下载。
+
+```java
+public class DownloadThread extends HandlerThread{
+
+    private static final String TAG = "DownloadThread";
+
+    public static final int TYPE_START = 2;//通知主线程任务开始
+    public static final int TYPE_FINISHED = 3;//通知主线程任务结束
+
+    private Handler mUIHandler;//主线程的Handler
+
+    public DownloadThread(String name) {
+        super(name);
+    }
+
+    /*
+    * 执行初始化任务
+    * */
+    @Override
+    protected void onLooperPrepared() {
+        Log.e(TAG, "onLooperPrepared: 1.Download线程开始准备");
+        super.onLooperPrepared();
+    }
+
+    //注入主线程Handler
+    public void setUIHandler(Handler UIhandler) {
+        mUIHandler = UIhandler;
+        Log.e(TAG, "setUIHandler: 2.主线程的handler传入到Download线程");
+    }
+
+    //Download线程开始下载
+    public void startDownload() {
+        Log.e(TAG, "startDownload: 3.通知主线程,此时Download线程开始下载");
+        mUIHandler.sendEmptyMessage(TYPE_START);
+
+        //模拟下载
+        Log.e(TAG, "startDownload: 5.Download线程下载中...");
+        SystemClock.sleep(2000);
+
+        Log.e(TAG, "startDownload: 6.通知主线程,此时Download线程下载完成");
+        mUIHandler.sendEmptyMessage(TYPE_FINISHED);
+    }
+}
+```
+2. MainActivity部分，接收HandlerThread消息更新UI界面
+
+```java
+public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = "MainActivity";
+
+    private DownloadThread mHandlerThread;//子线程
+    private Handler mUIhandler;//主线程的Handler
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        //初始化，参数为线程的名字
+        mHandlerThread = new DownloadThread("mHandlerThread");
+        //调用start方法启动线程
+        mHandlerThread.start();
+        //初始化Handler，传递mHandlerThread内部的一个looper
+        mUIhandler = new Handler(mHandlerThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                //判断mHandlerThread里传来的msg，根据msg进行主页面的UI更改
+                switch (msg.what) {
+                    case DownloadThread.TYPE_START:
+                    	//不是在这里更改UI哦，只是说在这个时间，你可以去做更改UI这件事情，改UI还是得在主线程。
+                        Log.e(TAG, "4.主线程知道Download线程开始下载了...这时候可以更改主界面UI");
+                        break;
+                    case DownloadThread.TYPE_FINISHED:
+                        Log.e(TAG, "7.主线程知道Download线程下载完成了...这时候可以更改主界面UI，收工");
+                        break;
+                    default:
+                        break;
+                }
+                super.handleMessage(msg);
+            }
+        };
+        //子线程注入主线程的mUIhandler，可以在子线程执行任务的时候，随时发送消息回来主线程
+        mHandlerThread.setUIHandler(mUIhandler);
+        //子线程开始下载
+        mHandlerThread.startDownload();
+    }
+
+    @Override
+    protected void onDestroy() {
+        //有2种退出方式
+        mHandlerThread.quit();
+        //mHandlerThread.quitSafely(); 需要API>=18
+        super.onDestroy();
+    }
+}
+```
+3. 运行结果log如下
+![在这里插入图片描述](https://img-blog.csdnimg.cn/20200907145659479.png#pic_center)
+
+##### 总结
+HandlerThread继承自Thread，因此HandlerThread其实就是一个线程。
+线程开启时也就是run方法运行起来后，线程同时创建一个含有消息队列的looper，并对外提供自己这个对象的get方法，这就是和普通的Thread不一样的地方。**可用于多个耗时任务要串行执行**。比如涉及到异步任务执行并且要发消息给主线程更新UI，这时候就可以使用HandlerThread，当然，你也可以使用普通的Thread子线程去实现，但免不了要自己创建Looper、MessageQueue等消息机制的对象，既然Android有封装好的提供给我们，那又何必多此一举
+
+通过上面的了解，很明显的可以看出，**handlerThread在一个子线程里面封装好了looper和handler**，所以这就是为什么在子线程里面使用handlerThread直接run就可以了。
+
+在getLooper里面，handlerThread对线程是否存在加了一个判断，因为handler在主线程，而handlerThread创建的Looper在子线程，如果子线程没有创建或者子线程的Looper没有创建，那handler也不知道给谁发消息。所以这里handlerThread加了一层判断，确保子线程的Looper创建。
+
+关于handlerThread的使用场景，一般就是在子线程中使用，因为如果按照正常的handler使用的话，需要自己额外在子线程新建一个Looper（由于主线程已经默认有一个Looper了，所以在主线程可以直接用handler）。例如在子线程不断地获取数据更新UI的时候，就可以用到handlerThread。
+
+
+

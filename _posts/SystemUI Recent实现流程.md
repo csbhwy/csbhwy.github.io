@@ -1,0 +1,186 @@
+﻿
+@[toc]
+#### 一、Recents实现逻辑跟踪
+
+Recents对象继承于SystemUI对象，并实现了CommandQueue.Callbacks的重写方法和父类对象的方法重写
+
+```java
+public class Recents extends SystemUI implements CommandQueue.Callbacks
+```
+
+- 构造方法
+
+```java
+public Recents(Context context, RecentsImplementation impl, CommandQueue commandQueue) {
+	super(context);
+	mImpl = impl;
+	mCommandQueue = commandQueue;
+}
+```
+
+- 重写方法
+
+```java
+//重写自父类SystemUI
+public void start()
+public void onBootCompleted()
+public void onConfigurationChanged(Configuration newConfig)
+//重写自接口CommandQueue.Callbacks
+public void appTransitionFinished(int displayId)
+public void showRecentApps(boolean triggeredFromAltTab)
+public void hideRecentApps(boolean triggeredFromAltTab, boolean triggeredFromHomeKey)
+public void toggleRecentApps()
+public void preloadRecentApps()
+public void cancelPreloadRecentApps()
+```
+
+重点关注showRecentApps/hideRecentApps/toggleRecentApps/preloadRecentApps/cancelPreloadRecentApps几个
+与recent加载和取消相关的方法。发现统一特点：
+
+```java
+if (!isUserSetup()) {
+    return;
+}
+//如果已配置此设备并已设置当前用户，全部由RecentsImplementation做对应处理
+```
+
+RecentsImplementation是接口类，具体实现交由OverviewProxyRecentsImpl。OverviewProxyRecentsImpl里面几个操作Recents的方法都会调用IOverviewProxy的方法去处理，IOverviewProxy是BinderProxy类型，是OverviewProxyService IPC通信的远端server的Binder代理，我们看一下这个Client是什么：
+
+```java
+Intent launcherServiceIntent = new Intent(ACTION_QUICKSTEP)
+		.setPackage(mRecentsComponentName.getPackageName());
+try {
+	mBound = mContext.bindServiceAsUser(launcherServiceIntent,
+			mOverviewServiceConnection,
+			Context.BIND_AUTO_CREATE | Context.BIND_FOREGROUND_SERVICE_WHILE_AWAKE,
+			UserHandle.of(getCurrentUserId()));
+} catch (SecurityException e) {
+	...
+}
+```
+
+从OverviewProxyService的bindServiceAsUser方法可知，IPC的server端是action为ACTION_QUICKSTEP的进程：
+
+```java
+private static final String ACTION_QUICKSTEP = "android.intent.action.QUICKSTEP_SERVICE";
+```
+
+过滤这个action，发现是packages/apps/Launcher3进程。从Intent的setPackage也能印证这一点：
+
+```java
+mRecentsComponentName = ComponentName.unflattenFromString(context.getString(
+                com.android.internal.R.string.config_recentsComponentName));
+```
+
+```xml
+<string name="config_recentsComponentName" translatable="false"
+            >com.android.launcher3/com.android.quickstep.RecentsActivity</string>
+```
+
+至此，可以清楚看到最终Recents的操作都交给了Launcher3去实现了。
+
+#### 二、Recent的触发跟踪
+
+下面我们再回过头看一下触发Recents的一些操作都是在哪里做的。
+在SystemUI的根目录下搜索Recents的操作方法，先使用showRecentApps去做搜索，可以看到是在CommandQueue类中被调的：
+
+```java
+case MSG_SHOW_RECENT_APPS:
+	for (int i = 0; i < mCallbacks.size(); i++) {
+		mCallbacks.get(i).showRecentApps(msg.arg1 != 0);
+	}
+	break;
+```
+
+其余几个方法也一样，都是通过异步handler消息去触发，而消息是在下面的方法中发送：
+
+```java
+public void showRecentApps(boolean triggeredFromAltTab) {
+	synchronized (mLock) {
+		mHandler.removeMessages(MSG_SHOW_RECENT_APPS);
+		mHandler.obtainMessage(MSG_SHOW_RECENT_APPS, triggeredFromAltTab ? 1 : 0, 0,
+				null).sendToTarget();
+	}
+}
+```
+
+但并未在SystemUI中搜到关于CommandQueue.showRecentApps()的调用，我们全局来搜，看到如下几个出现该方法的地方：
+
+```java
+StatusBarManagerInternal.java
+StatusBarManagerService.java
+DockedStackDividerController.java
+WindowManagerService.java
+PhoneWindowManager.java
+WindowManagerPolicy.java
+ActivityStarter.java
+ActivityStack.java
+```
+
+不清楚具体哪个类的调用的是我们我们关注的CommandQueue.showRecentApps()方法，下面一一分析：
+
+1. StatusBarManagerService里面的showRecentApps()是重写的StatusBarManagerInternal类中的showRecentApps()，实现交由mBar
+
+   ```java
+   @Override
+   public void showRecentApps(boolean triggeredFromAltTab) {
+       if (mBar != null) {
+           try {
+               mBar.showRecentApps(triggeredFromAltTab);
+           } catch (RemoteException ex) {}
+       }
+   }
+   ```
+
+   mBar是registerStatusBar时传入的IStatusBar对象，而registerStatusBar是在SystemUI的StatusBar.java中，传入的IStatusBar类型的参数正是CommandQueue，因此，这个调用是我们关注的。
+
+2. DockedStackDividerController里面的showRecentApps是调用的WindowManagerService中的，而WindowManagerService是调用的WindowManagerPolicy，但WindowManagerPolicy中showRecentApps是个空实现的方法，具体实现交由PhoneWindowManager，在PhoneWindowManager里，也是采用异步handler消息机制触发，最终还是调用到CommandQueue.showRecentApps()方法。
+   具体代码如下：
+
+   ```java
+   @Override
+   public void showRecentApps() {
+   	mHandler.removeMessages(MSG_DISPATCH_SHOW_RECENTS);
+   	mHandler.obtainMessage(MSG_DISPATCH_SHOW_RECENTS).sendToTarget();
+   }
+   //MSG_DISPATCH_SHOW_RECENTS消息的异步处理调用下面该类的私有方法showRecentApps
+   
+   private void showRecentApps(boolean triggeredFromAltTab) {
+   	mPreloadedRecentApps = false; // preloading no longer needs to be canceled
+   	StatusBarManagerInternal statusbar = getStatusBarManagerInternal();
+   	if (statusbar != null) {
+   		statusbar.showRecentApps(triggeredFromAltTab);
+   	}
+   }
+   
+   //在该类的按键拦截方法里有对recents的调用，从注释也可看出，这个是对 ALT + TAB 组合键的事件拦截
+   @Override
+   public long interceptKeyBeforeDispatching(WindowState win, KeyEvent event, int policyFlags) {
+       ...
+   	// Display task switcher for ALT-TAB.
+   	if (down && repeatCount == 0 && keyCode == KeyEvent.KEYCODE_TAB) {
+   		if (mRecentAppsHeldModifiers == 0 && !keyguardOn && isUserSetupComplete()) {
+   			final int shiftlessModifiers = event.getModifiers() & ~KeyEvent.META_SHIFT_MASK;
+   			if (KeyEvent.metaStateHasModifiers(shiftlessModifiers, KeyEvent.META_ALT_ON)) {
+   				mRecentAppsHeldModifiers = shiftlessModifiers;
+   				showRecentApps(true);//显示recent
+   				return -1;
+   			}
+   		}
+   	} else if (!down && mRecentAppsHeldModifiers != 0
+   			&& (metaState & mRecentAppsHeldModifiers) == 0) {
+   		mRecentAppsHeldModifiers = 0;
+   		hideRecentApps(true, false);
+   	}
+   	...
+   }
+   ```
+
+3. 最后两个出现showRecentApps是ActivityStarter和ActivityStack类，都是调用的WMS的showRecentApps。上面已经分析，我们重点关注这两个类触发该方法的原因，发现都是在
+
+   windowingMode == WINDOWING_MODE_SPLIT_SCREEN_PRIMARY，即进入分屏时候被调。
+
+#### 三、流程时序图
+![时序图](https://img-blog.csdnimg.cn/2021071913324585.png?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3djc2Jod3k=,size_16,color_FFFFFF,t_70)
+
+

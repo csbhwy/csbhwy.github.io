@@ -1,0 +1,60 @@
+﻿**[DESCRIPTION]**
+ 除了xml里配置紧急号码（ecc_list.xml）, SIM卡预置ECC, 网络下发的ECC, 目前MTK检查紧急号码的还会通过libphonenumber的判断是否是本地紧急号码（local emergency number）. 这类紧急号码会在UI上显示紧急号码，但是实际以普通号码（normal call）的方式发送到网络。
+针对某些特别的运营商如果不想要这类号码显示为紧急号码，可以根据以下步骤进行修改。
+ 
+Google local emergency number的最新规则请参考：
+https://github.com/googlei18n/libphonenumber/blob/2eafc96bbc35230c55d8a7e93257360fcfec161f/resources/ShortNumberMetadata.xml
+方法是先search country ISO (ex: China  -> CN), 然后找到<emergency> tag，查看紧急号码对应的正则表达式。
+以中国为例，1(?:1[09]|20)  表示：110,119,120是中国的local emergency number.
+
+```xml
+<!-- China -->
+<!-- http://www.itu.int/oth/T020200002B/en -->
+<territory id="CN">
+...
+<emergency>
+<nationalNumberPattern>
+1(?:
+1[09]|
+20
+)
+</nationalNumberPattern>
+<possibleLengths national="3"/>
+<exampleNumber>119</exampleNumber>
+</emergency>
+</territory>
+```
+ 
+**[SOLUTION]**
+ 可以通过以下两种方法修改当地紧急号码：
+1. 修改libphonenumber的紧急号码meta data，添加或者删除对应的紧急号码，具体方法请参考[如何修改google libphonenumber的meta data](https://blog.csdn.net/wcsbhwy/article/details/106567406)
+ 
+2. 通过修改紧急号码判断的函数（MtkPhoneNumberUtils.isEmergencyNumberExt），针对特定的ISO不要使用google libphonenumber判断紧急号码
+ 
+ alps/vendor/mediatek/proprietary/frameworks/opt/telephony-base / java/com/mediatek/internal/telephony/MtkPhoneNumberUtils.java
+```java
+public static boolean isEmergencyNumberExt(int subId, String number,
+            String defaultCountryIso, boolean useExactMatch) {
+    ...
+    // AOSP ECC check by country ISO (Local emergency number)
+    // ECC may conflict with MMI code like (*112#) because ShortNumberUtil
+    // will remove non digit chars before match ECC, so we add MMI code check
+    // before match ECC by ISO
+  - if (defaultCountryIso != null && !isMmiCode(number)) {
+  + if (defaultCountryIso != null && !defaultCountryIso.equals("CN") && !isMmiCode(number)) {
+        ShortNumberInfo info = ShortNumberInfo.getInstance();
+        boolean ret = false;
+        if (useExactMatch) {
+            ret = info.isEmergencyNumber(number, defaultCountryIso);
+        } else {
+            ret = info.connectsToEmergencyNumber(number, defaultCountryIso);
+        }
+        dlog("[isEmergencyNumberExt] AOSP check return: " +
+                ret + ", iso: " + defaultCountryIso + ", useExactMatch: " + useExactMatch);
+        return ret;
+    }
+    dlog("[isEmergencyNumber] no match ");
+    return false;
+}
+```
+
